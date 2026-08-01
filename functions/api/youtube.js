@@ -1,141 +1,158 @@
 const CHANNEL_ID = "UCUEDPQyLPN5lrTH06k2oWYA";
 
-function jsonResponse(data, status = 200, cacheSeconds = 0) {
-  const headers = {
-    "Content-Type": "application/json; charset=utf-8",
-    "X-Content-Type-Options": "nosniff",
-  };
+function json(data, status = 200, sharedCacheSeconds = 0) {
+  const cacheControl = sharedCacheSeconds
+    ? `public, max-age=300, s-maxage=${sharedCacheSeconds}`
+    : "no-store";
 
-  if (cacheSeconds > 0) {
-    headers["Cache-Control"] = `public, max-age=60, s-maxage=${cacheSeconds}`;
-  } else {
-    headers["Cache-Control"] = "no-store";
-  }
-
-  return new Response(JSON.stringify(data), { status, headers });
-}
-
-function upstreamErrorPayload(data, status) {
-  return {
-    error: "youtube_api_error",
-    upstreamStatus: status,
-    reason:
-      data?.error?.errors?.[0]?.reason ??
-      data?.error?.status ??
-      "unknown_error",
-  };
-}
-
-async function requestYouTube(apiKey, type) {
-  const endpoint =
-    type === "playlists"
-      ? "https://www.googleapis.com/youtube/v3/playlists"
-      : "https://www.googleapis.com/youtube/v3/search";
-
-  const params = new URLSearchParams({
-    part: "snippet",
-    channelId: CHANNEL_ID,
-    maxResults: type === "playlists" ? "10" : "1",
-    key: apiKey,
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": cacheControl,
+      "X-Content-Type-Options": "nosniff",
+    },
   });
+}
 
-  if (type === "playlists") {
-    params.set("part", "snippet,contentDetails");
-  } else {
-    params.set("type", "video");
-    params.set("eventType", "live");
-  }
-
-  const response = await fetch(`${endpoint}?${params.toString()}`, {
+async function getYouTubeJson(url) {
+  const response = await fetch(url, {
     headers: { Accept: "application/json" },
   });
 
-  let data;
+  let data = {};
   try {
     data = await response.json();
   } catch {
-    data = {};
+    // A hibát lent egységesen kezeljük.
   }
 
   if (!response.ok) {
+    const reason =
+      data?.error?.errors?.[0]?.reason ??
+      data?.error?.status ??
+      "unknown_error";
+
+    console.error("YouTube API error", response.status, reason);
+
     return {
       ok: false,
-      status: response.status,
-      payload: upstreamErrorPayload(data, response.status),
+      response: json(
+        {
+          error: "youtube_api_error",
+          upstreamStatus: response.status,
+          reason,
+        },
+        502
+      ),
     };
   }
 
-  if (type === "playlists") {
+  return { ok: true, data };
+}
+
+async function loadPlaylists(apiKey) {
+  const params = new URLSearchParams({
+    part: "snippet,contentDetails",
+    channelId: CHANNEL_ID,
+    maxResults: "10",
+    key: apiKey,
+  });
+
+  const result = await getYouTubeJson(
+    `https://www.googleapis.com/youtube/v3/playlists?${params}`
+  );
+
+  if (!result.ok) return result.response;
+
+  const items = (result.data.items ?? []).map((playlist) => {
+    const thumbnails = playlist?.snippet?.thumbnails ?? {};
+    const thumbnail =
+      thumbnails.high ??
+      thumbnails.medium ??
+      thumbnails.default ??
+      {};
+
     return {
-      ok: true,
-      payload: {
-        items: (data.items ?? []).map((item) => {
-          const thumbnails = item?.snippet?.thumbnails ?? {};
-          const thumbnail =
-            thumbnails.high ??
-            thumbnails.medium ??
-            thumbnails.default ??
-            null;
-
-          return {
-            id: item.id,
-            title: item?.snippet?.title ?? "YouTube lejátszási lista",
-            thumbnailUrl: thumbnail?.url ?? "",
-            itemCount: item?.contentDetails?.itemCount ?? null,
-          };
-        }),
-      },
+      id: playlist.id,
+      title: playlist?.snippet?.title ?? "YouTube lejátszási lista",
+      thumbnailUrl: thumbnail.url ?? "",
+      itemCount: playlist?.contentDetails?.itemCount ?? null,
     };
-  }
+  });
 
-  return {
-    ok: true,
-    payload: {
-      liveVideoId: data.items?.[0]?.id?.videoId ?? null,
+  // A lejátszási listák ritkán változnak: 6 órás Cloudflare-cache.
+  return json({ items }, 200, 21600);
+}
+
+async function loadLiveStatus(apiKey) {
+  const params = new URLSearchParams({
+    part: "snippet",
+    channelId: CHANNEL_ID,
+    type: "video",
+    eventType: "live",
+    maxResults: "1",
+    key: apiKey,
+  });
+
+  const result = await getYouTubeJson(
+    `https://www.googleapis.com/youtube/v3/search?${params}`
+  );
+
+  if (!result.ok) return result.response;
+
+  return json(
+    {
+      liveVideoId: result.data.items?.[0]?.id?.videoId ?? null,
     },
-  };
+    200,
+    1800
+  );
 }
 
 export async function onRequestGet(context) {
   const { request, env, waitUntil } = context;
-  const url = new URL(request.url);
-  const type = url.searchParams.get("type") ?? "playlists";
+
+  if (!env.GOOGLE_API_KEY) {
+    console.error("Missing GOOGLE_API_KEY binding");
+    return json({ error: "missing_google_api_key" }, 500);
+  }
+
+  const requestUrl = new URL(request.url);
+  const type = requestUrl.searchParams.get("type") ?? "playlists";
 
   if (type !== "playlists" && type !== "live") {
-    return jsonResponse(
-      { error: "invalid_type", allowed: ["playlists", "live"] },
+    return json(
+      {
+        error: "invalid_type",
+        allowed: ["playlists", "live"],
+      },
       400
     );
   }
 
-  if (!env.GOOGLE_API_KEY) {
-    return jsonResponse({ error: "missing_google_api_key" }, 500);
-  }
-
-  const cacheSeconds = type === "playlists" ? 3600 : 180;
-  const cacheUrl = new URL(request.url);
-  cacheUrl.search = `?type=${type}`;
+  // A cache-kulcsben nincs benne a Google API-kulcs.
+  const cacheUrl = new URL(requestUrl.origin + requestUrl.pathname);
+  cacheUrl.searchParams.set("type", type);
   const cacheKey = new Request(cacheUrl.toString(), { method: "GET" });
   const cache = caches.default;
 
   const cached = await cache.match(cacheKey);
-  if (cached) {
-    return cached;
-  }
+  if (cached) return cached;
 
   try {
-    const result = await requestYouTube(env.GOOGLE_API_KEY, type);
+    const response =
+      type === "playlists"
+        ? await loadPlaylists(env.GOOGLE_API_KEY)
+        : await loadLiveStatus(env.GOOGLE_API_KEY);
 
-    if (!result.ok) {
-      console.error("YouTube API error", result.payload);
-      return jsonResponse(result.payload, 502);
+    if (response.ok) {
+      waitUntil(cache.put(cacheKey, response.clone()));
     }
 
-    const response = jsonResponse(result.payload, 200, cacheSeconds);
-    waitUntil(cache.put(cacheKey, response.clone()));
     return response;
   } catch (error) {
-    console.error("YouTube proxy error", error);
-    return jsonResponse({ error: "youtube_proxy_failed" }, 502);
+    console.error("YouTube proxy failure", error);
+    return json({ error: "youtube_proxy_failed" }, 502);
   }
 }

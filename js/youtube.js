@@ -1,16 +1,19 @@
 var currentPlaylistIndex = 0;
 var playlists = [];
 
-async function fetchJson(url) {
-  const response = await fetch(url, {
-    headers: { Accept: "application/json" },
-  });
+async function fetchYouTubeData(type) {
+  const response = await fetch(
+    `/api/youtube?type=${encodeURIComponent(type)}`,
+    {
+      headers: { Accept: "application/json" },
+    }
+  );
 
-  let data;
+  let data = {};
   try {
     data = await response.json();
   } catch {
-    data = {};
+    // Egységes hibaüzenet lent.
   }
 
   if (!response.ok) {
@@ -21,10 +24,10 @@ async function fetchJson(url) {
   return data;
 }
 
-async function loadPlaylists() {
+async function execute() {
   try {
-    const data = await fetchJson("/api/youtube?type=playlists");
-    playlists = Array.isArray(data.items) ? data.items : [];
+    const response = await fetchYouTubeData("playlists");
+    playlists = Array.isArray(response.items) ? response.items : [];
     currentPlaylistIndex = 0;
     updatePlaylistDOM();
   } catch (error) {
@@ -33,10 +36,10 @@ async function loadPlaylists() {
 }
 
 function updatePlaylistDOM() {
-  const list = document.getElementById("playlist");
-  if (!list) return;
+  const playlistElement = document.getElementById("playlist");
+  if (!playlistElement) return;
 
-  list.replaceChildren();
+  playlistElement.replaceChildren();
 
   playlists.forEach((playlist, index) => {
     let className = "item";
@@ -51,9 +54,9 @@ function updatePlaylistDOM() {
       className = "next2";
     }
 
-    const listItem = document.createElement("li");
-    listItem.className = className;
-    listItem.dataset.index = String(index + 1);
+    const playlistElementItem = document.createElement("li");
+    playlistElementItem.className = className;
+    playlistElementItem.dataset.index = String(index + 1);
 
     const clickable = document.createElement("div");
     clickable.className = "item";
@@ -61,9 +64,12 @@ function updatePlaylistDOM() {
     clickable.setAttribute("role", "link");
     clickable.tabIndex = 0;
 
-    const openPlaylist = () => redirectToYouTube(playlist.id);
+    const openPlaylist = function () {
+      redirectToYouTube(playlist.id);
+    };
+
     clickable.addEventListener("click", openPlaylist);
-    clickable.addEventListener("keydown", (event) => {
+    clickable.addEventListener("keydown", function (event) {
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
         openPlaylist();
@@ -78,35 +84,38 @@ function updatePlaylistDOM() {
     const itemInner = document.createElement("div");
     itemInner.className = "item_in";
 
-    const background = document.createElement("div");
-    background.className = "img";
+    const backgroundImage = document.createElement("div");
+    backgroundImage.className = "img";
+
     if (playlist.thumbnailUrl) {
-      background.style.backgroundImage = `url("${playlist.thumbnailUrl}")`;
+      backgroundImage.style.backgroundImage =
+        `url("${playlist.thumbnailUrl}")`;
     }
 
-    itemInner.appendChild(background);
+    itemInner.appendChild(backgroundImage);
     clickable.append(image, itemInner);
-    listItem.appendChild(clickable);
-    list.appendChild(listItem);
+    playlistElementItem.appendChild(clickable);
+    playlistElement.appendChild(playlistElementItem);
   });
 }
 
 function previousPlaylist() {
   if (currentPlaylistIndex > 0) {
-    currentPlaylistIndex -= 1;
+    currentPlaylistIndex--;
     updatePlaylistDOM();
   }
 }
 
 function nextPlaylist() {
   if (currentPlaylistIndex < playlists.length - 1) {
-    currentPlaylistIndex += 1;
+    currentPlaylistIndex++;
     updatePlaylistDOM();
   }
 }
 
 function redirectToYouTube(playlistId) {
   if (!playlistId) return;
+
   window.open(
     `https://www.youtube.com/playlist?list=${encodeURIComponent(playlistId)}`,
     "_blank",
@@ -116,22 +125,22 @@ function redirectToYouTube(playlistId) {
 
 function closeLiveModal() {
   const modal = document.getElementById("myModal");
-  const iframe = document.getElementById("liveVideo");
+  const liveVideo = document.getElementById("liveVideo");
 
   if (modal) modal.style.display = "none";
-  if (iframe) iframe.src = "";
+  if (liveVideo) liveVideo.src = "";
 }
 
 async function checkLiveStatus() {
   try {
-    const data = await fetchJson("/api/youtube?type=live");
+    const data = await fetchYouTubeData("live");
     const modal = document.getElementById("myModal");
-    const iframe = document.getElementById("liveVideo");
+    const liveVideo = document.getElementById("liveVideo");
 
-    if (!modal || !iframe) return;
+    if (!modal || !liveVideo) return;
 
     if (data.liveVideoId) {
-      iframe.src =
+      liveVideo.src =
         `https://www.youtube.com/embed/${encodeURIComponent(data.liveVideoId)}` +
         "?autoplay=1&mute=1";
       modal.style.display = "block";
@@ -144,18 +153,21 @@ async function checkLiveStatus() {
   }
 }
 
-// A meglévő HTML onclick attribútumai miatt legyenek globálisan elérhetők.
+// A meglévő HTML onclick attribútumai miatt globálisan elérhetők maradnak.
 window.previousPlaylist = previousPlaylist;
 window.nextPlaylist = nextPlaylist;
 window.redirectToYouTube = redirectToYouTube;
 
 document.addEventListener("DOMContentLoaded", function () {
   const closeButton = document.querySelector("#myModal .close");
+
   if (closeButton) {
     closeButton.addEventListener("click", closeLiveModal);
   }
 
-  loadPlaylists();
+  execute();
   checkLiveStatus();
+
+  // A Cloudflare végpont 30 percig cache-eli az élő állapotot.
   window.setInterval(checkLiveStatus, 300000);
 });
