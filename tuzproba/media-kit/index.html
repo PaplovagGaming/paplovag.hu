@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Tűzpróba Creator Media Kit</title>
-  <meta id="meta-description" name="description" content="Tűzpróba creator media kit — audience, channel performance, featured content and partnership opportunities.">
+  <meta id="meta-description" name="description" content="Tűzpróba creator media kit — audience, channel performance, video showcase and partnership opportunities.">
   <meta property="og:title" content="Tűzpróba Creator Media Kit">
   <meta id="og-description" property="og:description" content="Hungarian food-entertainment creator media kit: international snacks, unusual drinks, tastings, reviews and challenges.">
   <meta property="og:type" content="website">
@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/tuzproba-media-kit.css?v=2">
+  <link rel="stylesheet" href="/css/tuzproba-media-kit.css?v=3">
 </head>
 <body>
   <header class="tp-topbar">
@@ -145,12 +145,45 @@
       <div class="tp-shell">
         <div class="tp-section-head">
           <div>
-            <h2 id="content-title" data-i18n="content.title">Featured content</h2>
-            <p class="tp-section-sub" data-i18n="content.sub">A selection of recent and representative Tűzpróba videos showcasing the channel's food-entertainment formats.</p>
+            <h2 id="content-title" data-i18n="content.title">Video showcase</h2>
+            <p class="tp-section-sub" data-i18n="content.sub">A live snapshot of the latest Shorts, the channel's most-viewed videos and the newest long-form uploads.</p>
           </div>
         </div>
-        <div class="tp-video-grid" id="video-grid">
-          <div class="tp-video tp-video-empty" data-i18n="content.loading">Loading featured videos…</div>
+
+        <div class="tp-content-group">
+          <div class="tp-content-group-head">
+            <div>
+              <h3 data-i18n="content.shortsTitle">Latest 3 Shorts</h3>
+              <p data-i18n="content.shortsSub">The three most recent short-form uploads.</p>
+            </div>
+          </div>
+          <div class="tp-video-grid tp-video-grid-shorts" id="shorts-grid">
+            <div class="tp-video-empty" data-i18n="content.loading">Loading videos…</div>
+          </div>
+        </div>
+
+        <div class="tp-content-group">
+          <div class="tp-content-group-head">
+            <div>
+              <h3 data-i18n="content.topTitle">Top 3 videos by views</h3>
+              <p data-i18n="content.topSub">The channel's most-viewed public videos.</p>
+            </div>
+          </div>
+          <div class="tp-video-grid" id="top-grid">
+            <div class="tp-video-empty" data-i18n="content.loading">Loading videos…</div>
+          </div>
+        </div>
+
+        <div class="tp-content-group">
+          <div class="tp-content-group-head">
+            <div>
+              <h3 data-i18n="content.longTitle">Latest 3 long-form videos</h3>
+              <p data-i18n="content.longSub">The three most recent long-form uploads.</p>
+            </div>
+          </div>
+          <div class="tp-video-grid" id="long-grid">
+            <div class="tp-video-empty" data-i18n="content.loading">Loading videos…</div>
+          </div>
         </div>
       </div>
     </section>
@@ -192,6 +225,6 @@
     <div class="tp-shell" data-i18n="footer">Tűzpróba · Creator Media Kit · paplovag.hu</div>
   </footer>
 
-  <script src="/js/tuzproba-media-kit.js?v=2" defer></script>
+  <script src="/js/tuzproba-media-kit.js?v=3" defer></script>
 </body>
 </html>
