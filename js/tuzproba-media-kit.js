@@ -22,7 +22,6 @@ const fallbackData = {
       { name: "Slovakia", share: 2.0 }
     ]
   },
-  featuredVideoIds: [],
   contact: {
     email: "paplovaggaming@gmail.com",
     channelUrl: "https://www.youtube.com/channel/UCdw9t0aw4TED_GV-ffWCQMg"
@@ -33,7 +32,7 @@ const translations = {
   en: {
     meta: {
       title: "Tűzpróba Creator Media Kit",
-      description: "Tűzpróba creator media kit — audience, channel performance, featured content and partnership opportunities."
+      description: "Tűzpróba creator media kit — audience, channel performance, video showcase and partnership opportunities."
     },
     nav: { audience: "Audience", content: "Content", partnerships: "Partnerships", contact: "Contact" },
     hero: {
@@ -71,11 +70,18 @@ const translations = {
       marketsTitle: "Top markets"
     },
     content: {
-      title: "Featured content",
-      sub: "A selection of recent and representative Tűzpróba videos showcasing the channel's food-entertainment formats.",
-      loading: "Loading featured videos…",
-      empty: "Featured videos are being updated.",
-      videoTitle: "Tűzpróba featured video"
+      title: "Video showcase",
+      sub: "A live snapshot of the latest Shorts, the channel's most-viewed videos and the newest long-form uploads.",
+      shortsTitle: "Latest 3 Shorts",
+      shortsSub: "The three most recent short-form uploads.",
+      topTitle: "Top 3 videos by views",
+      topSub: "The channel's most-viewed public videos.",
+      longTitle: "Latest 3 long-form videos",
+      longSub: "The three most recent long-form uploads.",
+      loading: "Loading videos…",
+      empty: "Videos are being updated.",
+      videoTitle: "Tűzpróba video",
+      views: "views"
     },
     partnerships: {
       title: "Partnership options",
@@ -104,7 +110,7 @@ const translations = {
   hu: {
     meta: {
       title: "Tűzpróba Creator Media Kit",
-      description: "A Tűzpróba creator media kitje — közönség, csatornateljesítmény, kiemelt tartalmak és együttműködési lehetőségek."
+      description: "A Tűzpróba creator media kitje — közönség, csatornateljesítmény, videók és együttműködési lehetőségek."
     },
     nav: { audience: "Közönség", content: "Tartalom", partnerships: "Együttműködés", contact: "Kapcsolat" },
     hero: {
@@ -142,11 +148,18 @@ const translations = {
       marketsTitle: "Legfontosabb piacok"
     },
     content: {
-      title: "Kiemelt tartalmak",
-      sub: "Válogatás friss és reprezentatív Tűzpróba-videókból, amelyek bemutatják a csatorna food-entertainment formátumait.",
-      loading: "Kiemelt videók betöltése…",
-      empty: "A kiemelt videók frissítés alatt állnak.",
-      videoTitle: "Tűzpróba kiemelt videó"
+      title: "Videós válogatás",
+      sub: "Az aktuális Shorts-videók, a csatorna legnézettebb tartalmai és a legutóbbi hosszú videók egy helyen.",
+      shortsTitle: "Legutóbbi 3 Shorts",
+      shortsSub: "A három legfrissebb rövid formátumú videó.",
+      topTitle: "Top 3 videó nézettség alapján",
+      topSub: "A csatorna három legnézettebb nyilvános videója.",
+      longTitle: "Legutóbbi 3 long-form videó",
+      longSub: "A három legfrissebb hosszú formátumú videó.",
+      loading: "Videók betöltése…",
+      empty: "A videók frissítés alatt állnak.",
+      videoTitle: "Tűzpróba videó",
+      views: "megtekintés"
     },
     partnerships: {
       title: "Együttműködési lehetőségek",
@@ -175,7 +188,7 @@ const translations = {
   de: {
     meta: {
       title: "Tűzpróba Creator Media Kit",
-      description: "Tűzpróba Creator Media Kit — Zielgruppe, Kanal-Performance, ausgewählte Inhalte und Kooperationsmöglichkeiten."
+      description: "Tűzpróba Creator Media Kit — Zielgruppe, Kanal-Performance, Videos und Kooperationsmöglichkeiten."
     },
     nav: { audience: "Zielgruppe", content: "Inhalte", partnerships: "Kooperationen", contact: "Kontakt" },
     hero: {
@@ -213,11 +226,18 @@ const translations = {
       marketsTitle: "Wichtigste Märkte"
     },
     content: {
-      title: "Ausgewählte Inhalte",
-      sub: "Eine Auswahl aktueller und repräsentativer Tűzpróba-Videos, die die Food-Entertainment-Formate des Kanals zeigen.",
-      loading: "Ausgewählte Videos werden geladen…",
-      empty: "Die ausgewählten Videos werden derzeit aktualisiert.",
-      videoTitle: "Ausgewähltes Tűzpróba-Video"
+      title: "Video-Auswahl",
+      sub: "Die neuesten Shorts, die meistgesehenen Videos des Kanals und die neuesten Longform-Videos auf einen Blick.",
+      shortsTitle: "Neueste 3 Shorts",
+      shortsSub: "Die drei neuesten Kurzformat-Videos.",
+      topTitle: "Top 3 Videos nach Aufrufen",
+      topSub: "Die drei meistgesehenen öffentlichen Videos des Kanals.",
+      longTitle: "Neueste 3 Longform-Videos",
+      longSub: "Die drei neuesten Longform-Videos.",
+      loading: "Videos werden geladen…",
+      empty: "Die Videos werden derzeit aktualisiert.",
+      videoTitle: "Tűzpróba Video",
+      views: "Aufrufe"
     },
     partnerships: {
       title: "Kooperationsmöglichkeiten",
@@ -249,7 +269,7 @@ const locales = { en: "en-US", hu: "hu-HU", de: "de-DE" };
 const validLanguages = new Set(Object.keys(translations));
 let currentLang = "en";
 let currentData = fallbackData;
-let renderedVideoIds = [];
+let showcaseData = { shorts: [], top: [], long: [] };
 
 function t(path) {
   return path.split(".").reduce((value, key) => value?.[key], translations[currentLang]) ?? path;
@@ -380,57 +400,68 @@ function renderContact(data) {
   }
 }
 
-function videoEmbed(videoId) {
-  const wrap = document.createElement("div");
-  wrap.className = "tp-video";
+function videoCard(item, { portrait = false, rank = null, showViews = false } = {}) {
+  const card = document.createElement("article");
+  card.className = `tp-video-card${portrait ? " tp-video-card-short" : ""}`;
+
+  const player = document.createElement("div");
+  player.className = "tp-video-player";
   const iframe = document.createElement("iframe");
-  iframe.src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}`;
-  iframe.title = t("content.videoTitle");
+  iframe.src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(item.id)}`;
+  iframe.title = item.title || t("content.videoTitle");
   iframe.loading = "lazy";
   iframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share";
   iframe.referrerPolicy = "strict-origin-when-cross-origin";
   iframe.allowFullscreen = true;
-  wrap.appendChild(iframe);
-  return wrap;
-}
+  player.appendChild(iframe);
+  card.appendChild(player);
 
-async function loadRecentVideoIds() {
-  try {
-    const response = await fetch("/api/youtube?type=recent&channel=tuzproba", { headers: { Accept: "application/json" } });
-    if (!response.ok) return [];
-    const payload = await response.json();
-    return (payload.items || []).map((item) => item.id).filter(Boolean).slice(0, 3);
-  } catch {
-    return [];
+  const meta = document.createElement("div");
+  meta.className = "tp-video-meta";
+  const title = document.createElement("strong");
+  title.textContent = item.title || t("content.videoTitle");
+  meta.appendChild(title);
+
+  if (showViews) {
+    const views = document.createElement("span");
+    const prefix = rank ? `#${rank} · ` : "";
+    views.textContent = `${prefix}${new Intl.NumberFormat(locales[currentLang]).format(Number(item.viewCount) || 0)} ${t("content.views")}`;
+    meta.appendChild(views);
   }
+
+  card.appendChild(meta);
+  return card;
 }
 
-function paintVideos(ids) {
-  const grid = document.getElementById("video-grid");
+function paintGrid(id, items, options = {}) {
+  const grid = document.getElementById(id);
   if (!grid) return;
   grid.innerHTML = "";
-  if (!ids.length) {
+
+  if (!Array.isArray(items) || !items.length) {
     const empty = document.createElement("div");
-    empty.className = "tp-video tp-video-empty";
+    empty.className = "tp-video-empty";
     empty.textContent = t("content.empty");
     grid.appendChild(empty);
     return;
   }
-  ids.forEach((id) => grid.appendChild(videoEmbed(id)));
+
+  items.slice(0, 3).forEach((item, index) => {
+    grid.appendChild(videoCard(item, { ...options, rank: options.showViews ? index + 1 : null }));
+  });
 }
 
-async function renderVideos(data) {
-  let ids = Array.isArray(data.featuredVideoIds) ? data.featuredVideoIds.filter(Boolean).slice(0, 3) : [];
-  if (!ids.length) ids = await loadRecentVideoIds();
-  renderedVideoIds = ids;
-  paintVideos(ids);
+function renderShowcase() {
+  paintGrid("shorts-grid", showcaseData.shorts, { portrait: true });
+  paintGrid("top-grid", showcaseData.top, { showViews: true });
+  paintGrid("long-grid", showcaseData.long);
 }
 
 function refreshDynamicLanguage() {
   renderStats(currentData);
   renderAudience(currentData);
   renderContact(currentData);
-  paintVideos(renderedVideoIds);
+  renderShowcase();
 }
 
 function setLanguage(lang, { persist = true, updateUrl = true } = {}) {
@@ -472,6 +503,23 @@ async function loadData() {
   }
 }
 
+async function loadShowcase() {
+  try {
+    const response = await fetch("/api/youtube?type=showcase&channel=tuzproba", {
+      headers: { Accept: "application/json" }
+    });
+    if (!response.ok) throw new Error("YouTube showcase unavailable");
+    const payload = await response.json();
+    return {
+      shorts: Array.isArray(payload.shorts) ? payload.shorts : [],
+      top: Array.isArray(payload.top) ? payload.top : [],
+      long: Array.isArray(payload.long) ? payload.long : []
+    };
+  } catch {
+    return { shorts: [], top: [], long: [] };
+  }
+}
+
 document.querySelectorAll("[data-lang]").forEach((button) => {
   button.addEventListener("click", () => setLanguage(button.dataset.lang));
 });
@@ -479,9 +527,13 @@ document.querySelectorAll("[data-lang]").forEach((button) => {
 (async function init() {
   currentLang = resolveInitialLanguage();
   applyStaticTranslations();
-  currentData = await loadData();
+
+  const [data, showcase] = await Promise.all([loadData(), loadShowcase()]);
+  currentData = data;
+  showcaseData = showcase;
+
   renderStats(currentData);
   renderAudience(currentData);
   renderContact(currentData);
-  await renderVideos(currentData);
+  renderShowcase();
 })();
