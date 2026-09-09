@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tűzpróba Media Kit Access</title>
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="theme-color" content="#160704">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/tuzproba-media-kit.css?v=4">
+</head>
+<body>
+  <main class="tp-admin">
+    <div class="tp-admin-head">
+      <span class="tp-kicker">Private creator media kit</span>
+      <h1>TŰZPRÓBA</h1>
+      <p class="tp-section-sub">Media Kit Access · Media Kit hozzáférés · Media-Kit-Zugang</p>
+    </div>
+
+    <section class="tp-admin-panel tp-login">
+      <form id="media-kit-login-form">
+        <div class="tp-field">
+          <label for="media-kit-password">Password · Jelszó · Passwort</label>
+          <input class="tp-input" id="media-kit-password" name="password" type="password" autocomplete="current-password" required autofocus>
+        </div>
+        <button class="tp-btn tp-btn-primary" type="submit">Open Media Kit</button>
+      </form>
+      <p class="tp-status" id="media-kit-login-status" aria-live="polite"></p>
+    </section>
+  </main>
+
+  <script src="/js/tuzproba-media-kit-gate.js?v=1" defer></script>
+</body>
+</html>
