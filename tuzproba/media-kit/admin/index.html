@@ -36,6 +36,16 @@
 
       <form id="editor-form">
         <div class="tp-admin-section">
+          <h2>YouTube Analytics automation</h2>
+          <p class="tp-section-sub">The media kit can refresh its YouTube statistics automatically every day at 00:01 Europe/Budapest time. The button below runs the same refresh immediately.</p>
+          <p class="tp-section-sub">Last successful YouTube refresh: <strong id="youtube-sync-time">Not yet refreshed</strong></p>
+          <div class="tp-actions" style="margin-top:14px">
+            <button class="tp-btn tp-btn-primary" type="button" id="youtube-refresh">Refresh YouTube data now</button>
+          </div>
+          <p class="tp-section-sub" id="youtube-sync-note"></p>
+        </div>
+
+        <div class="tp-admin-section">
           <h2>Channel statistics</h2>
           <div class="tp-admin-grid">
             <div class="tp-field"><label for="subscribers">Subscribers</label><input class="tp-input" id="subscribers" type="number" min="0" step="1" required></div>
@@ -94,6 +104,6 @@
     <p class="tp-status" id="admin-status" aria-live="polite"></p>
   </main>
 
-  <script src="/js/tuzproba-media-kit-admin.js?v=3" defer></script>
+  <script src="/js/tuzproba-media-kit-admin.js?v=4" defer></script>
 </body>
 </html>
