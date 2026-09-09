@@ -3,7 +3,7 @@ const CHANNELS = {
   tuzproba: "UCdw9t0aw4TED_GV-ffWCQMg"
 };
 
-const CACHE_VERSION = "20260909-showcase-v4";
+const CACHE_VERSION = "20260909-showcase-v5";
 
 function json(data, status = 200, sharedCacheSeconds = 0) {
   const cacheControl = sharedCacheSeconds
@@ -84,7 +84,8 @@ function normalizeVideo(item) {
     publishedAt: item?.snippet?.publishedAt ?? null,
     durationSeconds: parseIsoDurationSeconds(item?.contentDetails?.duration),
     viewCount: Number(item?.statistics?.viewCount || 0),
-    hasLiveStreamingDetails: Boolean(item?.liveStreamingDetails)
+    hasLiveStreamingDetails: Boolean(item?.liveStreamingDetails),
+    liveBroadcastContent: item?.snippet?.liveBroadcastContent ?? "none"
   };
 }
 
@@ -252,21 +253,31 @@ async function loadUploadsDetailed(apiKey, channelId, maxPages = 50) {
   return { ok: true, items, scannedIds: orderedIds.length, fullyScanned };
 }
 
+function publishTimestamp(item) {
+  const value = Date.parse(item?.publishedAt || "");
+  return Number.isFinite(value) ? value : 0;
+}
+
 async function loadShowcase(apiKey, channelId) {
   const uploadsResult = await loadUploadsDetailed(apiKey, channelId);
   if (!uploadsResult.ok) return uploadsResult.response;
 
-  const recentNonLive = uploadsResult.items.filter((item) => !item.hasLiveStreamingDetails);
+  const now = Date.now();
+  const published = uploadsResult.items
+    .filter((item) => publishTimestamp(item) > 0 && publishTimestamp(item) <= now)
+    .sort((a, b) => publishTimestamp(b) - publishTimestamp(a));
 
-  const shorts = recentNonLive
+  const shorts = published
+    .filter((item) => item.liveBroadcastContent === "none")
     .filter((item) => item.durationSeconds > 0 && item.durationSeconds <= 180)
     .slice(0, 5);
 
-  const long = recentNonLive
+  const long = published
+    .filter((item) => item.liveBroadcastContent === "none")
     .filter((item) => item.durationSeconds > 180)
     .slice(0, 3);
 
-  const top = [...uploadsResult.items]
+  const top = [...published]
     .filter((item) => item.viewCount > 0)
     .sort((a, b) => b.viewCount - a.viewCount)
     .slice(0, 3);
@@ -276,8 +287,9 @@ async function loadShowcase(apiKey, channelId) {
       shorts,
       top,
       long,
-      shortRule: "duration_lte_180_seconds_non_live",
-      topRule: "all_public_uploads_sorted_by_view_count",
+      shortRule: "published_duration_lte_180_seconds_not_current_or_upcoming_live",
+      longRule: "published_duration_gt_180_seconds_not_current_or_upcoming_live_sorted_by_published_at",
+      topRule: "all_public_published_uploads_sorted_by_view_count",
       scannedUploads: uploadsResult.scannedIds,
       fullyScanned: uploadsResult.fullyScanned
     },
