@@ -1,4 +1,4 @@
-const SESSION_COOKIE = "tp_media_session";
+const ACCESS_COOKIE = "tp_media_access";
 
 function parseCookies(request) {
   const result = {};
@@ -6,7 +6,11 @@ function parseCookies(request) {
   for (const item of raw.split(";")) {
     const [name, ...rest] = item.trim().split("=");
     if (!name) continue;
-    result[name] = decodeURIComponent(rest.join("="));
+    try {
+      result[name] = decodeURIComponent(rest.join("="));
+    } catch {
+      result[name] = rest.join("=");
+    }
   }
   return result;
 }
@@ -39,7 +43,7 @@ async function hmac(value, secret) {
 
 async function verifySession(token, secret) {
   if (!token || !secret) return false;
-  const [encoded, signature] = token.split(".");
+  const [encoded, signature] = String(token).split(".");
   if (!encoded || !signature) return false;
 
   const expected = await hmac(encoded, secret);
@@ -94,7 +98,8 @@ export async function onRequest(context) {
   }
 
   const cookies = parseCookies(request);
-  const authenticated = await verifySession(cookies[SESSION_COOKIE], secret);
+  const authenticated = await verifySession(cookies[ACCESS_COOKIE], secret);
+
   if (!authenticated) {
     const loginUrl = new URL("/tuzproba/media-kit/login/", url.origin);
     loginUrl.searchParams.set("next", `${url.pathname}${url.search}`);
