@@ -4,15 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Tűzpróba Creator Media Kit</title>
-  <meta name="description" content="Tűzpróba creator media kit — audience, channel performance, featured content and partnership opportunities.">
+  <meta id="meta-description" name="description" content="Tűzpróba creator media kit — audience, channel performance, featured content and partnership opportunities.">
   <meta property="og:title" content="Tűzpróba Creator Media Kit">
-  <meta property="og:description" content="Hungarian food-entertainment creator media kit: international snacks, unusual drinks, tastings, reviews and challenges.">
+  <meta id="og-description" property="og:description" content="Hungarian food-entertainment creator media kit: international snacks, unusual drinks, tastings, reviews and challenges.">
   <meta property="og:type" content="website">
   <meta name="theme-color" content="#160704">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/tuzproba-media-kit.css?v=1">
+  <link rel="stylesheet" href="/css/tuzproba-media-kit.css?v=2">
 </head>
 <body>
   <header class="tp-topbar">
@@ -21,12 +21,19 @@
         <span class="tp-brand-mark" aria-hidden="true"></span>
         <span>TŰZPRÓBA</span>
       </a>
-      <nav class="tp-nav" aria-label="Media kit navigation">
-        <a href="#audience">Audience</a>
-        <a href="#content">Content</a>
-        <a href="#partnerships">Partnerships</a>
-        <a href="#contact">Contact</a>
-      </nav>
+      <div class="tp-topbar-actions">
+        <nav class="tp-nav" aria-label="Media kit navigation">
+          <a href="#audience" data-i18n="nav.audience">Audience</a>
+          <a href="#content" data-i18n="nav.content">Content</a>
+          <a href="#partnerships" data-i18n="nav.partnerships">Partnerships</a>
+          <a href="#contact" data-i18n="nav.contact">Contact</a>
+        </nav>
+        <div class="tp-lang-switcher" role="group" aria-label="Language">
+          <button type="button" data-lang="hu" aria-pressed="false" title="Magyar">HU</button>
+          <button type="button" data-lang="en" aria-pressed="true" title="English">EN</button>
+          <button type="button" data-lang="de" aria-pressed="false" title="Deutsch">DE</button>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -34,11 +41,11 @@
     <section class="tp-hero">
       <div class="tp-shell tp-hero-grid">
         <div>
-          <span class="tp-kicker">Creator Media Kit · 2026</span>
+          <span class="tp-kicker" data-i18n="hero.kicker">Creator Media Kit · 2026</span>
           <h1><span>TŰZPRÓBA</span></h1>
-          <p class="tp-lead">Hungarian food-entertainment channel exploring international snacks, unusual drinks, tastings, food reviews, snack boxes and memorable food experiences.</p>
+          <p class="tp-lead" data-i18n="hero.lead">Hungarian food-entertainment channel exploring international snacks, unusual drinks, tastings, food reviews, snack boxes and memorable food experiences.</p>
         </div>
-        <p class="tp-hero-note">Built for brand partnerships that feel natural inside the content. Audience and performance figures are based on current YouTube Studio reporting and are date-stamped for transparency.</p>
+        <p class="tp-hero-note" data-i18n="hero.note">Built for brand partnerships that feel natural inside the content. Audience and performance figures are based on current YouTube Studio reporting and are date-stamped for transparency.</p>
       </div>
     </section>
 
@@ -46,52 +53,52 @@
       <div class="tp-shell">
         <div class="tp-section-head">
           <div>
-            <h2 id="performance-title">Channel performance</h2>
-            <p class="tp-section-sub">A current snapshot of Tűzpróba's YouTube performance, with time ranges shown explicitly for clarity.</p>
+            <h2 id="performance-title" data-i18n="performance.title">Channel performance</h2>
+            <p class="tp-section-sub" data-i18n="performance.sub">A current snapshot of Tűzpróba's YouTube performance, with time ranges shown explicitly for clarity.</p>
           </div>
-          <div class="tp-kicker">Updated <span id="updated-at">September 9, 2026</span></div>
+          <div class="tp-kicker"><span data-i18n="performance.updated">Updated</span>&nbsp;<span id="updated-at">September 9, 2026</span></div>
         </div>
 
         <div class="tp-stats">
           <article class="tp-card">
             <span class="tp-stat-value" id="stat-subscribers">8.92K+</span>
-            <span class="tp-stat-label">YouTube subscribers</span>
-            <span class="tp-stat-period">Current</span>
+            <span class="tp-stat-label" data-i18n="stats.subscribers">YouTube subscribers</span>
+            <span class="tp-stat-period" data-i18n="stats.current">Current</span>
           </article>
           <article class="tp-card">
             <span class="tp-stat-value" id="stat-views28">128K</span>
-            <span class="tp-stat-label">Views</span>
-            <span class="tp-stat-period">Last 28 days</span>
+            <span class="tp-stat-label" data-i18n="stats.views">Views</span>
+            <span class="tp-stat-period" data-i18n="stats.last28">Last 28 days</span>
           </article>
           <article class="tp-card">
             <span class="tp-stat-value" id="stat-views90">333K</span>
-            <span class="tp-stat-label">Views</span>
-            <span class="tp-stat-period">Last 90 days</span>
+            <span class="tp-stat-label" data-i18n="stats.views">Views</span>
+            <span class="tp-stat-period" data-i18n="stats.last90">Last 90 days</span>
           </article>
           <article class="tp-card">
             <span class="tp-stat-value" id="stat-watch90">27.3K hrs</span>
-            <span class="tp-stat-label">Watch time</span>
-            <span class="tp-stat-period">Last 90 days</span>
+            <span class="tp-stat-label" data-i18n="stats.watchTime">Watch time</span>
+            <span class="tp-stat-period" data-i18n="stats.last90">Last 90 days</span>
           </article>
           <article class="tp-card">
             <span class="tp-stat-value" id="stat-impressions90">2.01M</span>
-            <span class="tp-stat-label">Impressions</span>
-            <span class="tp-stat-period">Last 90 days</span>
+            <span class="tp-stat-label" data-i18n="stats.impressions">Impressions</span>
+            <span class="tp-stat-period" data-i18n="stats.last90">Last 90 days</span>
           </article>
           <article class="tp-card">
             <span class="tp-stat-value" id="stat-ctr">4.95%</span>
-            <span class="tp-stat-label">Impressions click-through rate</span>
-            <span class="tp-stat-period">Last 90 days</span>
+            <span class="tp-stat-label" data-i18n="stats.ctr">Impressions click-through rate</span>
+            <span class="tp-stat-period" data-i18n="stats.last90">Last 90 days</span>
           </article>
           <article class="tp-card">
             <span class="tp-stat-value" id="stat-avd">9:51</span>
-            <span class="tp-stat-label">Average view duration</span>
-            <span class="tp-stat-period">Last 90 days</span>
+            <span class="tp-stat-label" data-i18n="stats.avd">Average view duration</span>
+            <span class="tp-stat-period" data-i18n="stats.last90">Last 90 days</span>
           </article>
           <article class="tp-card">
             <span class="tp-stat-value" id="stat-growth">+1.27K</span>
-            <span class="tp-stat-label">Subscriber growth</span>
-            <span class="tp-stat-period">Last 90 days</span>
+            <span class="tp-stat-label" data-i18n="stats.growth">Subscriber growth</span>
+            <span class="tp-stat-period" data-i18n="stats.last90">Last 90 days</span>
           </article>
         </div>
       </div>
@@ -101,28 +108,28 @@
       <div class="tp-shell">
         <div class="tp-section-head">
           <div>
-            <h2 id="audience-title">Audience</h2>
-            <p class="tp-section-sub">Tűzpróba reaches a primarily Hungarian audience with a strong concentration in the commercially valuable 25–44 age range.</p>
+            <h2 id="audience-title" data-i18n="audience.title">Audience</h2>
+            <p class="tp-section-sub" data-i18n="audience.sub">Tűzpróba reaches a primarily Hungarian audience with a strong concentration in the commercially valuable 25–44 age range.</p>
           </div>
         </div>
 
         <div class="tp-audience-grid">
           <article class="tp-card tp-audience-card">
-            <h3>Core age group</h3>
+            <h3 data-i18n="audience.coreTitle">Core age group</h3>
             <div class="tp-big-number"><span id="core-age-label">25–44</span></div>
-            <p class="tp-section-sub"><strong id="core-age-share">68.9%</strong> of the measured audience falls into this combined age range.</p>
+            <p class="tp-section-sub"><strong id="core-age-share">68.9%</strong> <span data-i18n="audience.coreText">of the measured audience falls into this combined age range.</span></p>
             <div class="tp-meter" id="core-age-meter" style="--value:68.85%"><span></span></div>
           </article>
 
           <article class="tp-card tp-audience-card">
-            <h3>Gender split</h3>
-            <div class="tp-gender-row"><span>Male</span><strong id="male-share">71.7%</strong></div>
-            <div class="tp-gender-row"><span>Female</span><strong id="female-share">28.3%</strong></div>
-            <p class="tp-section-sub">Based on YouTube Studio audience demographics for the current reporting period.</p>
+            <h3 data-i18n="audience.genderTitle">Gender split</h3>
+            <div class="tp-gender-row"><span data-i18n="audience.male">Male</span><strong id="male-share">71.7%</strong></div>
+            <div class="tp-gender-row"><span data-i18n="audience.female">Female</span><strong id="female-share">28.3%</strong></div>
+            <p class="tp-section-sub" data-i18n="audience.genderNote">Based on YouTube Studio audience demographics for the current reporting period.</p>
           </article>
 
           <article class="tp-card tp-audience-card">
-            <h3>Top markets</h3>
+            <h3 data-i18n="audience.marketsTitle">Top markets</h3>
             <div id="country-list">
               <div class="tp-country-row"><span class="tp-country-name">Hungary</span><span class="tp-country-bar"><span style="width:79.6%"></span></span><span class="tp-country-share">79.6%</span></div>
               <div class="tp-country-row"><span class="tp-country-name">Romania</span><span class="tp-country-bar"><span style="width:6.8%"></span></span><span class="tp-country-share">6.8%</span></div>
@@ -138,12 +145,12 @@
       <div class="tp-shell">
         <div class="tp-section-head">
           <div>
-            <h2 id="content-title">Featured content</h2>
-            <p class="tp-section-sub">A selection of recent and representative Tűzpróba videos showcasing the channel's food-entertainment formats.</p>
+            <h2 id="content-title" data-i18n="content.title">Featured content</h2>
+            <p class="tp-section-sub" data-i18n="content.sub">A selection of recent and representative Tűzpróba videos showcasing the channel's food-entertainment formats.</p>
           </div>
         </div>
         <div class="tp-video-grid" id="video-grid">
-          <div class="tp-video tp-video-empty">Loading featured videos…</div>
+          <div class="tp-video tp-video-empty" data-i18n="content.loading">Loading featured videos…</div>
         </div>
       </div>
     </section>
@@ -152,17 +159,17 @@
       <div class="tp-shell">
         <div class="tp-section-head">
           <div>
-            <h2 id="partnership-title">Partnership options</h2>
-            <p class="tp-section-sub">Flexible collaborations can be tailored to campaign goals, products, creative format and budget.</p>
+            <h2 id="partnership-title" data-i18n="partnerships.title">Partnership options</h2>
+            <p class="tp-section-sub" data-i18n="partnerships.sub">Flexible collaborations can be tailored to campaign goals, products, creative format and budget.</p>
           </div>
         </div>
         <div class="tp-options">
-          <article class="tp-option"><strong>Dedicated video</strong><span>Custom food-entertainment format built around the product or campaign.</span></article>
-          <article class="tp-option"><strong>Integrated segment</strong><span>Natural brand integration within a relevant Tűzpróba episode.</span></article>
-          <article class="tp-option"><strong>Product review / unboxing</strong><span>Authentic product showcase with real reactions and creator commentary.</span></article>
-          <article class="tp-option"><strong>Short-form content</strong><span>Snackable vertical content suitable for Shorts and social distribution.</span></article>
-          <article class="tp-option"><strong>Giveaway / community activation</strong><span>Campaign concepts designed to involve the audience and create interaction.</span></article>
-          <article class="tp-option"><strong>Livestream activation</strong><span>Live tasting, product reveal or community-driven activation where appropriate.</span></article>
+          <article class="tp-option"><strong data-i18n="partnerships.dedicatedTitle">Dedicated video</strong><span data-i18n="partnerships.dedicatedText">Custom food-entertainment format built around the product or campaign.</span></article>
+          <article class="tp-option"><strong data-i18n="partnerships.integratedTitle">Integrated segment</strong><span data-i18n="partnerships.integratedText">Natural brand integration within a relevant Tűzpróba episode.</span></article>
+          <article class="tp-option"><strong data-i18n="partnerships.reviewTitle">Product review / unboxing</strong><span data-i18n="partnerships.reviewText">Authentic product showcase with real reactions and creator commentary.</span></article>
+          <article class="tp-option"><strong data-i18n="partnerships.shortTitle">Short-form content</strong><span data-i18n="partnerships.shortText">Snackable vertical content suitable for Shorts and social distribution.</span></article>
+          <article class="tp-option"><strong data-i18n="partnerships.giveawayTitle">Giveaway / community activation</strong><span data-i18n="partnerships.giveawayText">Campaign concepts designed to involve the audience and create interaction.</span></article>
+          <article class="tp-option"><strong data-i18n="partnerships.liveTitle">Livestream activation</strong><span data-i18n="partnerships.liveText">Live tasting, product reveal or community-driven activation where appropriate.</span></article>
         </div>
       </div>
     </section>
@@ -170,21 +177,21 @@
     <section class="tp-shell" id="contact">
       <div class="tp-cta">
         <div>
-          <h2>Let's create something worth tasting.</h2>
-          <p>For campaign briefs, collaboration ideas, product launches or creator partnerships, get in touch directly.</p>
+          <h2 data-i18n="cta.title">Let's create something worth tasting.</h2>
+          <p data-i18n="cta.text">For campaign briefs, collaboration ideas, product launches or creator partnerships, get in touch directly.</p>
         </div>
         <div class="tp-actions">
-          <a class="tp-btn tp-btn-primary" id="contact-email" href="mailto:paplovaggaming@gmail.com">Contact by email</a>
-          <a class="tp-btn" id="contact-channel" href="https://www.youtube.com/channel/UCdw9t0aw4TED_GV-ffWCQMg" target="_blank" rel="noopener">Visit YouTube</a>
+          <a class="tp-btn tp-btn-primary" id="contact-email" href="mailto:paplovaggaming@gmail.com" data-i18n="cta.email">Contact by email</a>
+          <a class="tp-btn" id="contact-channel" href="https://www.youtube.com/channel/UCdw9t0aw4TED_GV-ffWCQMg" target="_blank" rel="noopener" data-i18n="cta.youtube">Visit YouTube</a>
         </div>
       </div>
     </section>
   </main>
 
   <footer class="tp-footer">
-    <div class="tp-shell">Tűzpróba · Creator Media Kit · paplovag.hu</div>
+    <div class="tp-shell" data-i18n="footer">Tűzpróba · Creator Media Kit · paplovag.hu</div>
   </footer>
 
-  <script src="/js/tuzproba-media-kit.js?v=1" defer></script>
+  <script src="/js/tuzproba-media-kit.js?v=2" defer></script>
 </body>
 </html>
