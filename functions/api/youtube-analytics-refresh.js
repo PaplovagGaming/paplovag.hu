@@ -4,7 +4,7 @@ const REACH_HISTORY_KEY = "tuzproba-youtube-reach-history";
 const ADMIN_COOKIE = "tp_media_admin_session";
 const TARGET_CHANNEL_ID = "UCdw9t0aw4TED_GV-ffWCQMg";
 const TIME_ZONE = "Europe/Budapest";
-const REACH_REPORT_TYPE_ID = "channel_reach_basic_a1";
+const REACH_REPORT_TYPE_IDS = ["channel_reach_basic_a1", "channel_reach_combined_a1"];
 const REACH_JOB_NAME = "Tuzproba Media Kit Reach";
 const REACH_BATCH_SIZE = 30;
 const REACH_HISTORY_DAYS = 180;
@@ -351,11 +351,25 @@ function aggregateReachCsv(text, fallbackDate) {
   return daily;
 }
 
+async function listReachReportTypes(accessToken) {
+  const reportTypes = [];
+  let pageToken = "";
+  for (let page = 0; page < 3; page += 1) {
+    const params = new URLSearchParams({ pageSize: "100", includeSystemManaged: "true" });
+    if (pageToken) params.set("pageToken", pageToken);
+    const payload = await googleJson(`https://youtubereporting.googleapis.com/v1/reportTypes?${params}`, accessToken);
+    reportTypes.push(...(payload.reportTypes || []));
+    pageToken = payload.nextPageToken || "";
+    if (!pageToken) break;
+  }
+  return reportTypes;
+}
+
 async function listReachJobs(accessToken) {
   const jobs = [];
   let pageToken = "";
   for (let page = 0; page < 3; page += 1) {
-    const params = new URLSearchParams({ pageSize: "100" });
+    const params = new URLSearchParams({ pageSize: "100", includeSystemManaged: "true" });
     if (pageToken) params.set("pageToken", pageToken);
     const payload = await googleJson(`https://youtubereporting.googleapis.com/v1/jobs?${params}`, accessToken);
     jobs.push(...(payload.jobs || []));
@@ -365,23 +379,52 @@ async function listReachJobs(accessToken) {
   return jobs;
 }
 
+function reachError(code, message, status = 400) {
+  const error = new Error(message || code);
+  error.code = code;
+  error.status = status;
+  error.reason = code;
+  return error;
+}
+
 async function ensureReachJob(accessToken) {
+  const reportTypes = await listReachReportTypes(accessToken);
+  const selectedType = REACH_REPORT_TYPE_IDS
+    .map((id) => reportTypes.find((reportType) => reportType.id === id))
+    .find(Boolean);
+
+  if (!selectedType) {
+    throw reachError(
+      "reach_report_type_unavailable",
+      "The connected YouTube channel does not expose a supported reach report type yet.",
+      400
+    );
+  }
+
   const jobs = await listReachJobs(accessToken);
-  const existing = jobs.find((job) => job.reportTypeId === REACH_REPORT_TYPE_ID);
-  if (existing) return { job: existing, created: false };
+  const existing = jobs.find((job) => job.reportTypeId === selectedType.id);
+  if (existing) return { job: existing, created: false, reportTypeId: selectedType.id };
+
+  if (selectedType.systemManaged) {
+    throw reachError(
+      "reach_system_job_unavailable",
+      "The reach report is system-managed, but no matching reporting job is available for this channel yet.",
+      409
+    );
+  }
 
   try {
     const job = await googleJson("https://youtubereporting.googleapis.com/v1/jobs", accessToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reportTypeId: REACH_REPORT_TYPE_ID, name: REACH_JOB_NAME })
+      body: JSON.stringify({ reportTypeId: selectedType.id, name: REACH_JOB_NAME })
     });
-    return { job, created: true };
+    return { job, created: true, reportTypeId: selectedType.id };
   } catch (error) {
     if (error.status === 409) {
       const refreshed = await listReachJobs(accessToken);
-      const job = refreshed.find((item) => item.reportTypeId === REACH_REPORT_TYPE_ID);
-      if (job) return { job, created: false };
+      const job = refreshed.find((item) => item.reportTypeId === selectedType.id);
+      if (job) return { job, created: false, reportTypeId: selectedType.id };
     }
     throw error;
   }
@@ -390,15 +433,11 @@ async function ensureReachJob(accessToken) {
 async function listReachReports(accessToken, jobId, analyticsEndDate) {
   const reports = [];
   let pageToken = "";
-  const startDate = shiftDate(analyticsEndDate, -(REACH_HISTORY_DAYS - 1));
-  const beforeDate = shiftDate(analyticsEndDate, 1);
+  const minDate = shiftDate(analyticsEndDate, -(REACH_HISTORY_DAYS - 1));
+  const maxDate = analyticsEndDate;
 
-  for (let page = 0; page < 3; page += 1) {
-    const params = new URLSearchParams({
-      pageSize: "100",
-      startTimeAtOrAfter: `${startDate}T00:00:00Z`,
-      startTimeBefore: `${beforeDate}T00:00:00Z`
-    });
+  for (let page = 0; page < 4; page += 1) {
+    const params = new URLSearchParams({ pageSize: "100" });
     if (pageToken) params.set("pageToken", pageToken);
     const payload = await googleJson(
       `https://youtubereporting.googleapis.com/v1/jobs/${encodeURIComponent(jobId)}/reports?${params}`,
@@ -412,11 +451,16 @@ async function listReachReports(accessToken, jobId, analyticsEndDate) {
   const newestByStartDate = new Map();
   for (const report of reports) {
     const date = String(report.startTime || "").slice(0, 10);
-    if (!date) continue;
+    if (!date || date < minDate || date > maxDate) continue;
     const previous = newestByStartDate.get(date);
-    if (!previous || String(report.createTime || "") > String(previous.createTime || "")) newestByStartDate.set(date, report);
+    if (!previous || String(report.createTime || "") > String(previous.createTime || "")) {
+      newestByStartDate.set(date, report);
+    }
   }
-  return [...newestByStartDate.values()].sort((a, b) => String(b.startTime || "").localeCompare(String(a.startTime || "")));
+
+  return [...newestByStartDate.values()].sort((a, b) =>
+    String(b.startTime || "").localeCompare(String(a.startTime || ""))
+  );
 }
 
 async function loadReachHistory(kv) {
@@ -501,20 +545,27 @@ function findCompleteReachWindow(history, analyticsEndDate) {
 
 function reportingApiUnavailable(error) {
   const message = `${error?.message || ""} ${error?.reason || ""}`.toLowerCase();
-  return error?.status === 403 || error?.status === 404 || message.includes("service_disabled") || message.includes("not been used") || message.includes("disabled");
+  return (
+    message.includes("service_disabled") ||
+    message.includes("has not been used") ||
+    message.includes("not been used") ||
+    message.includes("api has not been used") ||
+    message.includes("is disabled") ||
+    message.includes("access not configured")
+  );
 }
 
 async function syncReachMetrics({ accessToken, kv, analyticsEndDate, stats }) {
   const attemptedAt = new Date().toISOString();
   try {
-    const { job, created } = await ensureReachJob(accessToken);
-    if (!job?.id) throw new Error("reach_job_missing_id");
+    const { job, created, reportTypeId } = await ensureReachJob(accessToken);
+    if (!job?.id) throw reachError("reach_job_missing_id", "YouTube did not return a reporting job ID.", 502);
 
     if (created) {
       return {
         status: "job_created",
         jobId: job.id,
-        reportTypeId: REACH_REPORT_TYPE_ID,
+        reportTypeId,
         lastAttemptAt: attemptedAt,
         reportsProcessedThisRun: 0,
         daysCached: 0
@@ -523,13 +574,14 @@ async function syncReachMetrics({ accessToken, kv, analyticsEndDate, stats }) {
 
     const reports = await listReachReports(accessToken, job.id, analyticsEndDate);
     if (!reports.length) {
+      const history = await loadReachHistory(kv);
       return {
         status: "waiting_for_reports",
         jobId: job.id,
-        reportTypeId: REACH_REPORT_TYPE_ID,
+        reportTypeId,
         lastAttemptAt: attemptedAt,
         reportsProcessedThisRun: 0,
-        daysCached: 0
+        daysCached: Object.keys(history.days || {}).length
       };
     }
 
@@ -548,7 +600,7 @@ async function syncReachMetrics({ accessToken, kv, analyticsEndDate, stats }) {
       return {
         status: "ready",
         jobId: job.id,
-        reportTypeId: REACH_REPORT_TYPE_ID,
+        reportTypeId,
         lastAttemptAt: attemptedAt,
         lastSuccessAt: new Date().toISOString(),
         startDate: window.startDate,
@@ -561,20 +613,23 @@ async function syncReachMetrics({ accessToken, kv, analyticsEndDate, stats }) {
     return {
       status: processed > 0 ? "backfilling" : "waiting_for_reports",
       jobId: job.id,
-      reportTypeId: REACH_REPORT_TYPE_ID,
+      reportTypeId,
       lastAttemptAt: attemptedAt,
       reportsProcessedThisRun: processed,
       daysCached
     };
   } catch (error) {
     console.warn("YouTube Reporting reach sync unavailable", error.reason || error.message);
+    const code = String(error.code || error.reason || "reach_reporting_error");
     return {
-      status: reportingApiUnavailable(error) ? "api_unavailable" : "error",
-      reportTypeId: REACH_REPORT_TYPE_ID,
+      status: reportingApiUnavailable(error) ? "api_unavailable" : code === "reach_report_type_unavailable" ? "report_type_unavailable" : "error",
+      reportTypeId: null,
       lastAttemptAt: attemptedAt,
       reportsProcessedThisRun: 0,
       daysCached: 0,
-      error: String(error.reason || error.message || "reach_reporting_error").slice(0, 180)
+      errorCode: code.slice(0, 100),
+      errorStatus: Number(error.status) || null,
+      error: String(error.message || error.reason || "reach_reporting_error").slice(0, 240)
     };
   }
 }
@@ -696,6 +751,7 @@ async function refreshMediaKit(env) {
   else if (reachSync.status === "waiting_for_reports") warnings.push("reach_reports_pending");
   else if (reachSync.status === "backfilling") warnings.push("reach_backfill_pending");
   else if (reachSync.status === "api_unavailable") warnings.push("reach_reporting_api_unavailable");
+  else if (reachSync.status === "report_type_unavailable") warnings.push("reach_report_type_unavailable");
   else if (reachSync.status === "error") warnings.push("reach_reports_unavailable");
 
   next.youtubeSync = {
