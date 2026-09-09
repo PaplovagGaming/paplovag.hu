@@ -27,27 +27,47 @@
   }
 
   paintGrid = function(id, items, options = {}) {
-    if (id !== "shorts-grid") {
-      return originalPaintGrid(id, items, options);
-    }
+    if (id === "shorts-grid") {
+      const grid = document.getElementById(id);
+      if (!grid) return;
+      grid.innerHTML = "";
 
-    const grid = document.getElementById(id);
-    if (!grid) return;
-    grid.innerHTML = "";
+      if (!Array.isArray(items) || !items.length) {
+        const empty = document.createElement("div");
+        empty.className = "tp-video-empty";
+        empty.textContent = typeof t === "function" ? t("content.empty") : "Videos are being updated.";
+        grid.appendChild(empty);
+        updateShortsCopy();
+        return;
+      }
 
-    if (!Array.isArray(items) || !items.length) {
-      const empty = document.createElement("div");
-      empty.className = "tp-video-empty";
-      empty.textContent = typeof t === "function" ? t("content.empty") : "Videos are being updated.";
-      grid.appendChild(empty);
+      items.slice(0, 5).forEach((item) => {
+        grid.appendChild(videoCard(item, { ...options, portrait: true, rank: null, showViews: true }));
+      });
+
       updateShortsCopy();
       return;
     }
 
-    items.slice(0, 5).forEach((item) => {
-      grid.appendChild(videoCard(item, { ...options, portrait: true, rank: null }));
-    });
+    if (id === "long-grid") {
+      const grid = document.getElementById(id);
+      if (!grid) return;
+      grid.innerHTML = "";
 
-    updateShortsCopy();
+      if (!Array.isArray(items) || !items.length) {
+        const empty = document.createElement("div");
+        empty.className = "tp-video-empty";
+        empty.textContent = typeof t === "function" ? t("content.empty") : "Videos are being updated.";
+        grid.appendChild(empty);
+        return;
+      }
+
+      items.slice(0, 3).forEach((item) => {
+        grid.appendChild(videoCard(item, { ...options, rank: null, showViews: true }));
+      });
+      return;
+    }
+
+    return originalPaintGrid(id, items, options);
   };
 })();
