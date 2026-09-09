@@ -3,7 +3,7 @@ const CHANNELS = {
   tuzproba: "UCdw9t0aw4TED_GV-ffWCQMg"
 };
 
-const CACHE_VERSION = "20260909-showcase-v3";
+const CACHE_VERSION = "20260909-showcase-v4";
 
 function json(data, status = 200, sharedCacheSeconds = 0) {
   const cacheControl = sharedCacheSeconds
@@ -260,7 +260,7 @@ async function loadShowcase(apiKey, channelId) {
 
   const shorts = recentNonLive
     .filter((item) => item.durationSeconds > 0 && item.durationSeconds <= 180)
-    .slice(0, 3);
+    .slice(0, 5);
 
   const long = recentNonLive
     .filter((item) => item.durationSeconds > 180)
