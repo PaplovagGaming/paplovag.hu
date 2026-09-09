@@ -2,6 +2,7 @@ const apiUrl = "/api/tuzproba-media-kit";
 let currentData = null;
 
 function qs(id) { return document.getElementById(id); }
+
 function setStatus(message, type = "") {
   const el = qs("admin-status");
   if (!el) return;
@@ -16,43 +17,34 @@ async function api(body) {
     credentials: "same-origin",
     body: JSON.stringify(body)
   });
+
   let payload = {};
   try { payload = await response.json(); } catch {}
+
   if (!response.ok) {
     const error = new Error(payload.error || `HTTP ${response.status}`);
     error.code = payload.error;
     error.payload = payload;
     throw error;
   }
+
   return payload;
 }
 
 async function loadPublicData() {
-  const response = await fetch(apiUrl, { headers: { Accept: "application/json" }, cache: "no-store" });
+  const response = await fetch(apiUrl, {
+    headers: { Accept: "application/json" },
+    cache: "no-store"
+  });
   if (!response.ok) throw new Error("Could not load media kit data.");
-  const payload = await response.json();
-  return payload;
-}
-
-function extractVideoId(value) {
-  const raw = String(value || "").trim();
-  if (!raw) return "";
-  if (/^[A-Za-z0-9_-]{11}$/.test(raw)) return raw;
-  try {
-    const url = new URL(raw);
-    if (url.hostname === "youtu.be") return url.pathname.split("/").filter(Boolean)[0] || "";
-    if (url.searchParams.get("v")) return url.searchParams.get("v");
-    const parts = url.pathname.split("/").filter(Boolean);
-    const embedIndex = parts.findIndex((part) => part === "embed" || part === "shorts" || part === "live");
-    if (embedIndex >= 0 && parts[embedIndex + 1]) return parts[embedIndex + 1];
-  } catch {}
-  return "";
+  return response.json();
 }
 
 function populate(data) {
   currentData = JSON.parse(JSON.stringify(data));
   const s = data.stats || {};
   const a = data.audience || {};
+
   qs("subscribers").value = s.subscribers ?? "";
   qs("views28d").value = s.views28d ?? "";
   qs("views90d").value = s.views90d ?? "";
@@ -61,6 +53,7 @@ function populate(data) {
   qs("ctr").value = s.ctr ?? "";
   qs("avgViewDuration").value = s.avgViewDuration ?? "";
   qs("subscriberGrowth90d").value = s.subscriberGrowth90d ?? "";
+
   qs("coreAgeLabel").value = a.coreAgeLabel ?? "25–44";
   qs("coreAgeShare").value = a.coreAgeShare ?? "";
   qs("male").value = a.male ?? "";
@@ -72,9 +65,6 @@ function populate(data) {
     qs(`country${i + 1}Name`).value = countries[i]?.name || "";
     qs(`country${i + 1}Share`).value = countries[i]?.share ?? "";
   }
-
-  const videos = Array.isArray(data.featuredVideoIds) ? data.featuredVideoIds : [];
-  for (let i = 0; i < 3; i += 1) qs(`video${i + 1}`).value = videos[i] || "";
 }
 
 function gather() {
@@ -83,15 +73,6 @@ function gather() {
     const name = qs(`country${i + 1}Name`).value.trim();
     const share = qs(`country${i + 1}Share`).value;
     if (name) countries.push({ name, share: Number(share) || 0 });
-  }
-
-  const featuredVideoIds = [];
-  for (let i = 0; i < 3; i += 1) {
-    const raw = qs(`video${i + 1}`).value.trim();
-    if (!raw) continue;
-    const id = extractVideoId(raw);
-    if (!/^[A-Za-z0-9_-]{11}$/.test(id)) throw new Error(`Featured video ${i + 1} is not a valid YouTube URL or video ID.`);
-    featuredVideoIds.push(id);
   }
 
   return {
@@ -113,7 +94,6 @@ function gather() {
       female: Number(qs("female").value),
       countries
     },
-    featuredVideoIds,
     contact: {
       email: qs("email").value.trim(),
       channelUrl: currentData?.contact?.channelUrl || "https://www.youtube.com/channel/UCdw9t0aw4TED_GV-ffWCQMg"
@@ -141,6 +121,7 @@ async function checkSession() {
 qs("login-form")?.addEventListener("submit", async (event) => {
   event.preventDefault();
   setStatus("Signing in…");
+
   try {
     const result = await api({ action: "login", password: qs("password").value });
     const payload = await loadPublicData();
@@ -162,6 +143,7 @@ qs("login-form")?.addEventListener("submit", async (event) => {
 qs("editor-form")?.addEventListener("submit", async (event) => {
   event.preventDefault();
   setStatus("Saving…");
+
   try {
     const data = gather();
     const result = await api({ action: "save", data });
