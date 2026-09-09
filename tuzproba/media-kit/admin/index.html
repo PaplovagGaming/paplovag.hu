@@ -9,14 +9,14 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/tuzproba-media-kit.css?v=1">
+  <link rel="stylesheet" href="/css/tuzproba-media-kit.css?v=3">
 </head>
 <body>
   <main class="tp-admin">
     <div class="tp-admin-head">
       <span class="tp-kicker">Private editor</span>
       <h1>Tűzpróba Media Kit Admin</h1>
-      <p class="tp-section-sub">Update the public creator media kit without editing the page itself. The password is checked server-side and is never stored in this page.</p>
+      <p class="tp-section-sub">Update the public creator media kit without editing the page itself. Video sections are populated automatically from YouTube.</p>
     </div>
 
     <section class="tp-admin-panel tp-login" id="login-panel">
@@ -72,13 +72,8 @@
         </div>
 
         <div class="tp-admin-section">
-          <h2>Featured YouTube videos</h2>
-          <p class="tp-section-sub">Paste a YouTube URL or the 11-character video ID. Leave all three empty to show the latest Tűzpróba uploads automatically.</p>
-          <div class="tp-admin-grid">
-            <div class="tp-field"><label for="video1">Featured video 1</label><input class="tp-input" id="video1" type="text" placeholder="https://youtu.be/..."></div>
-            <div class="tp-field"><label for="video2">Featured video 2</label><input class="tp-input" id="video2" type="text" placeholder="https://youtu.be/..."></div>
-            <div class="tp-field"><label for="video3">Featured video 3</label><input class="tp-input" id="video3" type="text" placeholder="https://youtu.be/..."></div>
-          </div>
+          <h2>Video showcase</h2>
+          <p class="tp-section-sub">No manual video selection is needed. The public page automatically shows the latest 3 Shorts, the top 3 public videos by views, and the latest 3 long-form uploads.</p>
         </div>
 
         <div class="tp-admin-section">
@@ -99,6 +94,6 @@
     <p class="tp-status" id="admin-status" aria-live="polite"></p>
   </main>
 
-  <script src="/js/tuzproba-media-kit-admin.js?v=1" defer></script>
+  <script src="/js/tuzproba-media-kit-admin.js?v=2" defer></script>
 </body>
 </html>
