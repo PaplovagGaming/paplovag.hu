@@ -9,29 +9,29 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/tuzproba-media-kit.css?v=3">
+  <link rel="stylesheet" href="/css/tuzproba-media-kit.css?v=4">
 </head>
 <body>
   <main class="tp-admin">
     <div class="tp-admin-head">
       <span class="tp-kicker">Private editor</span>
       <h1>Tűzpróba Media Kit Admin</h1>
-      <p class="tp-section-sub">Update the public creator media kit without editing the page itself. Video sections are populated automatically from YouTube.</p>
+      <p class="tp-section-sub">This editor has a separate administrator password. The public media-kit access password does not grant editing rights.</p>
     </div>
 
     <section class="tp-admin-panel tp-login" id="login-panel">
       <form id="login-form">
         <div class="tp-field">
-          <label for="password">Password</label>
+          <label for="password">Admin password</label>
           <input class="tp-input" id="password" name="password" type="password" autocomplete="current-password" required autofocus>
         </div>
-        <button class="tp-btn tp-btn-primary" type="submit">Sign in</button>
+        <button class="tp-btn tp-btn-primary" type="submit">Sign in to admin</button>
       </form>
     </section>
 
     <section class="tp-admin-panel tp-hidden" id="editor-panel">
       <div class="tp-config-warning tp-hidden" id="storage-warning">
-        The editor is signed in, but persistent storage is not configured yet. Add a Cloudflare Pages KV binding named <strong>MEDIA_KIT_KV</strong> before saving. The public page already works with the current default figures.
+        The editor is signed in, but persistent storage is not configured for this deployment. Bind the Cloudflare KV namespace as <strong>KV</strong> or <strong>MEDIA_KIT_KV</strong> before saving.
       </div>
 
       <form id="editor-form">
@@ -73,7 +73,7 @@
 
         <div class="tp-admin-section">
           <h2>Video showcase</h2>
-          <p class="tp-section-sub">No manual video selection is needed. The public page automatically shows the latest 3 Shorts, the top 3 public videos by views, and the latest 3 long-form uploads.</p>
+          <p class="tp-section-sub">No manual video selection is needed. The media kit automatically shows the latest 5 Shorts, the top 3 public videos by views, and the latest 3 long-form uploads.</p>
         </div>
 
         <div class="tp-admin-section">
@@ -84,9 +84,9 @@
         <div class="tp-admin-actions">
           <div class="tp-actions">
             <button class="tp-btn tp-btn-primary" type="submit">Save media kit</button>
-            <button class="tp-btn" type="button" id="open-public">Open public page</button>
+            <button class="tp-btn" type="button" id="open-public">Open media kit</button>
           </div>
-          <button class="tp-btn" type="button" id="logout">Sign out</button>
+          <button class="tp-btn" type="button" id="logout">Sign out of admin</button>
         </div>
       </form>
     </section>
@@ -94,6 +94,6 @@
     <p class="tp-status" id="admin-status" aria-live="polite"></p>
   </main>
 
-  <script src="/js/tuzproba-media-kit-admin.js?v=2" defer></script>
+  <script src="/js/tuzproba-media-kit-admin.js?v=3" defer></script>
 </body>
 </html>
