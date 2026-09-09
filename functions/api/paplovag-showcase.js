@@ -1,7 +1,9 @@
 const ACCESS_COOKIE = "pg_media_access";
 const TOKEN_KEY = "paplovag-youtube-oauth-refresh-token";
-const CACHE_KEY = "paplovag-youtube-showcase-v2";
+const CACHE_KEY = "paplovag-youtube-showcase-v3";
 const TARGET_CHANNEL_ID = "UCUEDPQyLPN5lrTH06k2oWYA";
+const TECH_PLAYLIST_ID = "PLrH3C01Hh-gnG5Qs_Xwe3z2yxMFYSwFWh";
+const GAMING_PLAYLIST_ID = "PLrH3C01Hh-gk7hkFKyO7wwne6FYEhdAup";
 const CACHE_TTL_SECONDS = 2 * 60 * 60;
 const TIME_ZONE = "Europe/Budapest";
 
@@ -35,11 +37,8 @@ function parseCookies(request) {
   for (const item of (request.headers.get("Cookie") || "").split(";")) {
     const [name, ...rest] = item.trim().split("=");
     if (!name) continue;
-    try {
-      result[name] = decodeURIComponent(rest.join("="));
-    } catch {
-      result[name] = rest.join("=");
-    }
+    try { result[name] = decodeURIComponent(rest.join("=")); }
+    catch { result[name] = rest.join("="); }
   }
   return result;
 }
@@ -85,11 +84,8 @@ async function verifySession(token, secret) {
   let mismatch = 0;
   for (let i = 0; i < signature.length; i += 1) mismatch |= signature.charCodeAt(i) ^ expected.charCodeAt(i);
   if (mismatch !== 0) return false;
-  try {
-    return Number(JSON.parse(decodeBase64urlText(encoded)).exp) > Math.floor(Date.now() / 1000);
-  } catch {
-    return false;
-  }
+  try { return Number(JSON.parse(decodeBase64urlText(encoded)).exp) > Math.floor(Date.now() / 1000); }
+  catch { return false; }
 }
 
 async function encryptionKey(secret) {
@@ -181,35 +177,18 @@ function publicVideo(item) {
   };
 }
 
-function displayDimensions(item) {
-  const stream = (item?.fileDetails?.videoStreams || []).find((candidate) =>
-    Number(candidate?.widthPixels) > 0 && Number(candidate?.heightPixels) > 0
-  );
-  if (!stream) return null;
-  let width = Number(stream.widthPixels);
-  let height = Number(stream.heightPixels);
-  if (stream.rotation === "clockwise" || stream.rotation === "counterClockwise") {
-    [width, height] = [height, width];
-  }
-  return { width, height, ratio: width > 0 ? height / width : 0 };
+function reportObjects(report) {
+  const names = (report?.columnHeaders || []).map((header) => header.name);
+  return (report?.rows || []).map((row) => Object.fromEntries(names.map((name, index) => [name, row[index]])));
 }
 
-function isTruePortraitShort(item) {
-  const duration = parseIsoDurationSeconds(item?.contentDetails?.duration);
-  if (!(duration > 0 && duration <= 180)) return false;
-  const dimensions = displayDimensions(item);
-  return Boolean(dimensions && dimensions.ratio >= 1.5);
-}
-
-async function loadOwnedVideoDetails(accessToken, ids, includeFileDetails = false) {
+async function loadOwnedVideoDetails(accessToken, ids) {
   const uniqueIds = [...new Set((ids || []).filter(Boolean))];
   if (!uniqueIds.length) return [];
   const output = [];
   for (let i = 0; i < uniqueIds.length; i += 50) {
     const params = new URLSearchParams({
-      part: includeFileDetails
-        ? "snippet,contentDetails,statistics,status,liveStreamingDetails,fileDetails"
-        : "snippet,contentDetails,statistics,status,liveStreamingDetails",
+      part: "snippet,contentDetails,statistics,status,liveStreamingDetails",
       id: uniqueIds.slice(i, i + 50).join(","),
       maxResults: "50"
     });
@@ -219,7 +198,30 @@ async function loadOwnedVideoDetails(accessToken, ids, includeFileDetails = fals
   return output;
 }
 
-async function loadRecentShowcase(accessToken, uploadsPlaylistId) {
+async function loadCreatorContentTypes(accessToken, ids, channelStartDate, endDate) {
+  if (!ids.length) return new Map();
+  const params = new URLSearchParams({
+    ids: "channel==MINE",
+    startDate: channelStartDate,
+    endDate,
+    metrics: "views",
+    dimensions: "video,creatorContentType",
+    filters: `video==${ids.join(",")}`,
+    sort: "-views",
+    maxResults: "200"
+  });
+  const report = await googleJson(`https://youtubeanalytics.googleapis.com/v2/reports?${params}`, accessToken);
+  const types = new Map();
+  for (const row of reportObjects(report)) {
+    const videoId = String(row.video || "");
+    const type = String(row.creatorContentType || "");
+    if (!videoId || !type) continue;
+    if (type === "SHORTS" || !types.has(videoId)) types.set(videoId, type);
+  }
+  return types;
+}
+
+async function loadRecentShowcase(accessToken, uploadsPlaylistId, channelStartDate, endDate) {
   const shorts = [];
   const long = [];
   let pageToken = "";
@@ -235,16 +237,30 @@ async function loadRecentShowcase(accessToken, uploadsPlaylistId) {
     const playlist = await googleJson(`https://www.googleapis.com/youtube/v3/playlistItems?${params}`, accessToken);
     const ids = (playlist.items || []).map((item) => item?.contentDetails?.videoId).filter(Boolean);
     scannedUploads += ids.length;
-    const details = await loadOwnedVideoDetails(accessToken, ids, true);
+
+    const [details, contentTypes] = await Promise.all([
+      loadOwnedVideoDetails(accessToken, ids),
+      loadCreatorContentTypes(accessToken, ids, channelStartDate, endDate)
+    ]);
     const byId = new Map(details.map((item) => [item.id, item]));
 
     for (const id of ids) {
       const item = byId.get(id);
       if (!item || item?.status?.privacyStatus !== "public") continue;
       if (item?.snippet?.liveBroadcastContent && item.snippet.liveBroadcastContent !== "none") continue;
+      if (item?.liveStreamingDetails) continue;
+
+      const type = contentTypes.get(id) || "";
       const duration = parseIsoDurationSeconds(item?.contentDetails?.duration);
-      if (shorts.length < 5 && isTruePortraitShort(item)) shorts.push(publicVideo(item));
-      if (long.length < 3 && duration > 180) long.push(publicVideo(item));
+
+      if (shorts.length < 5 && type === "SHORTS") {
+        shorts.push(publicVideo(item));
+      } else if (long.length < 3 && type && type !== "SHORTS" && type !== "LIVE_STREAM") {
+        long.push(publicVideo(item));
+      } else if (long.length < 3 && !type && duration > 180) {
+        long.push(publicVideo(item));
+      }
+
       if (shorts.length >= 5 && long.length >= 3) break;
     }
 
@@ -254,11 +270,6 @@ async function loadRecentShowcase(accessToken, uploadsPlaylistId) {
   }
 
   return { shorts, long, scannedUploads };
-}
-
-function reportObjects(report) {
-  const names = (report?.columnHeaders || []).map((header) => header.name);
-  return (report?.rows || []).map((row) => Object.fromEntries(names.map((name, index) => [name, row[index]])));
 }
 
 async function loadLifetimeTop(accessToken, channelStartDate, endDate) {
@@ -274,7 +285,7 @@ async function loadLifetimeTop(accessToken, channelStartDate, endDate) {
   const report = await googleJson(`https://youtubeanalytics.googleapis.com/v2/reports?${params}`, accessToken);
   const rows = reportObjects(report);
   const ids = rows.map((row) => row.video).filter(Boolean);
-  const details = await loadOwnedVideoDetails(accessToken, ids, false);
+  const details = await loadOwnedVideoDetails(accessToken, ids);
   const byId = new Map(details.map((item) => [item.id, item]));
   const top = [];
   for (const row of rows) {
@@ -284,6 +295,43 @@ async function loadLifetimeTop(accessToken, channelStartDate, endDate) {
     if (top.length >= 3) break;
   }
   return top;
+}
+
+async function loadPlaylistSection(accessToken, playlistId) {
+  const ids = [];
+  let pageToken = "";
+
+  for (let page = 0; page < 20; page += 1) {
+    const params = new URLSearchParams({
+      part: "contentDetails",
+      playlistId,
+      maxResults: "50"
+    });
+    if (pageToken) params.set("pageToken", pageToken);
+    const payload = await googleJson(`https://www.googleapis.com/youtube/v3/playlistItems?${params}`, accessToken);
+    for (const item of payload.items || []) {
+      const id = item?.contentDetails?.videoId;
+      if (id) ids.push(id);
+    }
+    pageToken = payload.nextPageToken || "";
+    if (!pageToken) break;
+  }
+
+  const details = await loadOwnedVideoDetails(accessToken, ids);
+  const videos = details
+    .filter((item) => item?.status?.privacyStatus === "public")
+    .filter((item) => item?.snippet?.channelId === TARGET_CHANNEL_ID)
+    .map(publicVideo);
+
+  const top = [...videos]
+    .sort((a, b) => (Number(b.viewCount) || 0) - (Number(a.viewCount) || 0))
+    .slice(0, 3);
+
+  const latest = [...videos]
+    .sort((a, b) => Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0))
+    .slice(0, 3);
+
+  return { playlistId, top, latest, totalVideos: videos.length };
 }
 
 async function buildShowcase(env, kv) {
@@ -308,20 +356,26 @@ async function buildShowcase(env, kv) {
   const endDate = shiftDate(today, -1);
   const channelStartDate = String(target?.snippet?.publishedAt || "2013-01-01").slice(0, 10);
 
-  const [recent, top] = await Promise.all([
-    loadRecentShowcase(accessToken, uploadsPlaylistId),
-    loadLifetimeTop(accessToken, channelStartDate, endDate)
+  const [recent, top, tech, gaming] = await Promise.all([
+    loadRecentShowcase(accessToken, uploadsPlaylistId, channelStartDate, endDate),
+    loadLifetimeTop(accessToken, channelStartDate, endDate),
+    loadPlaylistSection(accessToken, TECH_PLAYLIST_ID),
+    loadPlaylistSection(accessToken, GAMING_PLAYLIST_ID)
   ]);
 
   const showcase = {
     shorts: recent.shorts,
     top,
     long: recent.long,
+    tech,
+    gaming,
     updatedAt: new Date().toISOString(),
     scannedRecentUploads: recent.scannedUploads,
-    shortRule: "owner_fileDetails_portrait_ratio_gte_1.5_and_duration_lte_180_seconds",
+    shortRule: "youtube_analytics_creatorContentType_SHORTS",
     topRule: `youtube_analytics_full_channel_${channelStartDate}_through_${endDate}_sorted_by_views`,
-    longRule: "latest_public_duration_gt_180_seconds"
+    longRule: "latest_public_non_short_non_livestream",
+    techRule: `playlist_${TECH_PLAYLIST_ID}_top_by_current_views_and_latest_by_publishedAt`,
+    gamingRule: `playlist_${GAMING_PLAYLIST_ID}_top_by_current_views_and_latest_by_publishedAt`
   };
 
   await kv.put(CACHE_KEY, JSON.stringify(showcase), { expirationTtl: CACHE_TTL_SECONDS });
@@ -341,7 +395,7 @@ export async function onRequestGet({ request, env }) {
   if (!force) {
     try {
       const cached = await kv.get(CACHE_KEY, "json");
-      if (cached?.shorts && cached?.top && cached?.long) return json(cached);
+      if (cached?.shorts && cached?.top && cached?.tech?.top && cached?.gaming?.top) return json(cached);
     } catch {}
   }
 
