@@ -1,4 +1,5 @@
 const apiUrl = "/api/tuzproba-media-kit";
+const youtubeRefreshUrl = "/api/youtube-analytics-refresh";
 let currentData = null;
 
 function qs(id) { return document.getElementById(id); }
@@ -41,6 +42,39 @@ async function loadPublicData() {
   return response.json();
 }
 
+function formatSyncTime(value) {
+  if (!value) return "Not yet refreshed";
+  try {
+    return new Intl.DateTimeFormat("hu-HU", {
+      timeZone: "Europe/Budapest",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit"
+    }).format(new Date(value));
+  } catch {
+    return value;
+  }
+}
+
+function renderSyncInfo(data) {
+  const sync = data?.youtubeSync || {};
+  if (qs("youtube-sync-time")) qs("youtube-sync-time").textContent = formatSyncTime(sync.lastSuccessAt);
+
+  const notes = [];
+  if (sync.analyticsEndDate) notes.push(`Analytics data through ${sync.analyticsEndDate}.`);
+  if (Array.isArray(sync.warnings) && sync.warnings.length) {
+    if (sync.warnings.includes("reach_metrics_preserved") || sync.warnings.includes("impressions_preserved") || sync.warnings.includes("ctr_preserved")) {
+      notes.push("YouTube reach metrics were unavailable, so the previous Impressions / CTR values were kept.");
+    }
+    if (sync.warnings.includes("demographics_preserved")) notes.push("Previous demographic values were kept.");
+    if (sync.warnings.includes("countries_preserved")) notes.push("Previous market values were kept.");
+  }
+  if (qs("youtube-sync-note")) qs("youtube-sync-note").textContent = notes.join(" ");
+}
+
 function populate(data) {
   currentData = JSON.parse(JSON.stringify(data));
   const s = data.stats || {};
@@ -66,6 +100,8 @@ function populate(data) {
     qs(`country${i + 1}Name`).value = countries[i]?.name || "";
     qs(`country${i + 1}Share`).value = countries[i]?.share ?? "";
   }
+
+  renderSyncInfo(data);
 }
 
 function gather() {
@@ -163,6 +199,47 @@ qs("editor-form")?.addEventListener("submit", async (event) => {
     } else {
       setStatus(error.message || "Save failed.", "error");
     }
+  }
+});
+
+qs("youtube-refresh")?.addEventListener("click", async () => {
+  const button = qs("youtube-refresh");
+  if (button) button.disabled = true;
+  setStatus("Refreshing YouTube Analytics…");
+
+  try {
+    const response = await fetch(youtubeRefreshUrl, {
+      method: "POST",
+      headers: { Accept: "application/json" },
+      credentials: "same-origin"
+    });
+
+    let payload = {};
+    try { payload = await response.json(); } catch {}
+    if (!response.ok) {
+      const error = new Error(payload.error || `HTTP ${response.status}`);
+      error.code = payload.error;
+      throw error;
+    }
+
+    populate(payload.data);
+    const warningText = Array.isArray(payload.warnings) && payload.warnings.length
+      ? " Some unavailable metrics kept their previous values."
+      : "";
+    setStatus(`YouTube Analytics refreshed successfully.${warningText}`, "ok");
+  } catch (error) {
+    const messages = {
+      oauth_not_connected: "YouTube OAuth is not connected yet.",
+      oauth_refresh_failed: "Google rejected the stored OAuth refresh token. Reconnect YouTube Analytics.",
+      wrong_youtube_channel: "The connected Google account does not expose the Tűzpróba YouTube channel.",
+      analytics_core_data_unavailable: "YouTube Analytics did not return the required channel data yet.",
+      not_authenticated: "Your admin session expired. Sign in again.",
+      storage_not_configured: "The Media Kit KV binding is missing.",
+      oauth_secrets_missing: "The YouTube OAuth secrets are missing from Cloudflare."
+    };
+    setStatus(messages[error.code] || `YouTube refresh failed: ${error.message}`, "error");
+  } finally {
+    if (button) button.disabled = false;
   }
 });
 
