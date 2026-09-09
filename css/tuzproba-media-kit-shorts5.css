@@ -3,6 +3,29 @@
   justify-content: stretch;
 }
 
+.tp-video-grid {
+  align-items: stretch;
+}
+
+.tp-video-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.tp-video-player {
+  flex: 0 0 auto;
+}
+
+.tp-video-meta {
+  flex: 1;
+  align-content: start;
+}
+
+.tp-video-meta strong {
+  min-height: 2.9em;
+}
+
 @media (max-width: 900px) {
   .tp-video-grid-shorts {
     grid-template-columns: repeat(5, minmax(0, 230px));
