@@ -34,6 +34,7 @@ async function api(body) {
 async function loadPublicData() {
   const response = await fetch(apiUrl, {
     headers: { Accept: "application/json" },
+    credentials: "same-origin",
     cache: "no-store"
   });
   if (!response.ok) throw new Error("Could not load media kit data.");
@@ -109,12 +110,12 @@ function showEditor(storageConfigured) {
 
 async function checkSession() {
   try {
-    const status = await api({ action: "status" });
+    const status = await api({ action: "admin_status" });
     if (!status.authenticated) return;
     const payload = await loadPublicData();
     populate(payload.data);
     showEditor(status.storageConfigured);
-    setStatus("Signed in.", "ok");
+    setStatus("Admin session active.", "ok");
   } catch {}
 }
 
@@ -123,17 +124,19 @@ qs("login-form")?.addEventListener("submit", async (event) => {
   setStatus("Signing in…");
 
   try {
-    const result = await api({ action: "login", password: qs("password").value });
+    const result = await api({ action: "admin_login", password: qs("password").value });
     const payload = await loadPublicData();
     populate(payload.data);
     showEditor(result.storageConfigured);
     qs("password").value = "";
-    setStatus("Signed in.", "ok");
+    setStatus("Admin signed in.", "ok");
   } catch (error) {
-    if (error.code === "password_not_configured") {
-      setStatus("MEDIA_KIT_PASSWORD is not configured in Cloudflare Pages yet.", "error");
-    } else if (error.code === "invalid_password") {
-      setStatus("Incorrect password.", "error");
+    if (error.code === "admin_password_not_configured") {
+      setStatus("MEDIA_KIT_ADMIN_PASSWORD is not configured in Cloudflare yet.", "error");
+    } else if (error.code === "invalid_admin_password") {
+      setStatus("Incorrect admin password.", "error");
+    } else if (error.code === "media_kit_access_required") {
+      location.href = `/tuzproba/media-kit/login/?next=${encodeURIComponent(location.pathname)}`;
     } else {
       setStatus(`Sign-in failed: ${error.message}`, "error");
     }
@@ -149,12 +152,14 @@ qs("editor-form")?.addEventListener("submit", async (event) => {
     const result = await api({ action: "save", data });
     currentData = result.data;
     populate(result.data);
-    setStatus(`Saved successfully. Public media kit updated: ${result.data.updatedAt}.`, "ok");
+    setStatus(`Saved successfully. Media kit updated: ${result.data.updatedAt}.`, "ok");
   } catch (error) {
     if (error.code === "storage_not_configured") {
-      setStatus("MEDIA_KIT_KV is not bound in Cloudflare Pages yet.", "error");
+      setStatus("No KV binding found. Bind the namespace as KV or MEDIA_KIT_KV in this Cloudflare project.", "error");
     } else if (error.code === "not_authenticated") {
-      setStatus("Your session expired. Refresh the page and sign in again.", "error");
+      setStatus("Your admin session expired. Sign in again.", "error");
+      qs("editor-panel").classList.add("tp-hidden");
+      qs("login-panel").classList.remove("tp-hidden");
     } else {
       setStatus(error.message || "Save failed.", "error");
     }
@@ -162,7 +167,7 @@ qs("editor-form")?.addEventListener("submit", async (event) => {
 });
 
 qs("logout")?.addEventListener("click", async () => {
-  try { await api({ action: "logout" }); } catch {}
+  try { await api({ action: "admin_logout" }); } catch {}
   location.reload();
 });
 
