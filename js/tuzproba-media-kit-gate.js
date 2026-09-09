@@ -11,7 +11,7 @@ function setStatus(message, type = "") {
 function safeNextPath() {
   try {
     const raw = new URL(window.location.href).searchParams.get("next") || "/tuzproba/media-kit/";
-    if (raw.startsWith("/tuzproba/media-kit")) return raw;
+    if (raw.startsWith("/tuzproba/media-kit") && !raw.startsWith("/tuzproba/media-kit/login")) return raw;
   } catch {}
   return "/tuzproba/media-kit/";
 }
@@ -25,7 +25,7 @@ form?.addEventListener("submit", async (event) => {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       credentials: "same-origin",
-      body: JSON.stringify({ action: "login", password: passwordInput?.value || "" })
+      body: JSON.stringify({ action: "access_login", password: passwordInput?.value || "" })
     });
 
     let payload = {};
@@ -38,13 +38,13 @@ form?.addEventListener("submit", async (event) => {
         return;
       }
       if (payload.error === "password_not_configured") {
-        setStatus("Password protection is not configured yet.", "error");
+        setStatus("Media kit password protection is not configured yet.", "error");
         return;
       }
       throw new Error(payload.error || `HTTP ${response.status}`);
     }
 
-    setStatus("Access granted.", "ok");
+    setStatus("Access granted · Hozzáférés engedélyezve · Zugriff gewährt", "ok");
     window.location.replace(safeNextPath());
   } catch (error) {
     setStatus(`Login failed: ${error.message}`, "error");
