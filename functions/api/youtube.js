@@ -3,6 +3,8 @@ const CHANNELS = {
   tuzproba: "UCdw9t0aw4TED_GV-ffWCQMg"
 };
 
+const CACHE_VERSION = "20260909-showcase-v2";
+
 function json(data, status = 200, sharedCacheSeconds = 0) {
   const cacheControl = sharedCacheSeconds
     ? `public, max-age=300, s-maxage=${sharedCacheSeconds}`
@@ -27,7 +29,6 @@ async function getYouTubeJson(url) {
   try {
     data = await response.json();
   } catch {
-    // The error is normalized below.
   }
 
   if (!response.ok) {
@@ -202,15 +203,15 @@ async function loadRecentVideos(apiKey, channelId) {
   return json({ items }, 200, 3600);
 }
 
-async function loadRecentUploadsDetailed(apiKey, channelId) {
+async function loadUploadsDetailed(apiKey, channelId, maxPages = 15) {
   const uploadsResult = await getUploadsPlaylistId(apiKey, channelId);
   if (!uploadsResult.ok) return uploadsResult;
-  if (!uploadsResult.playlistId) return { ok: true, items: [] };
+  if (!uploadsResult.playlistId) return { ok: true, items: [], scannedIds: 0 };
 
   const orderedIds = [];
   let pageToken = "";
 
-  for (let page = 0; page < 3; page += 1) {
+  for (let page = 0; page < maxPages; page += 1) {
     const params = new URLSearchParams({
       part: "contentDetails",
       playlistId: uploadsResult.playlistId,
@@ -244,65 +245,37 @@ async function loadRecentUploadsDetailed(apiKey, channelId) {
     .filter((item) => !item?.liveStreamingDetails)
     .map(normalizeVideo);
 
-  return { ok: true, items };
-}
-
-async function loadTopVideos(apiKey, channelId) {
-  const searchParams = new URLSearchParams({
-    part: "snippet",
-    channelId,
-    type: "video",
-    order: "viewCount",
-    maxResults: "12",
-    key: apiKey
-  });
-  const searchResult = await getYouTubeJson(
-    `https://www.googleapis.com/youtube/v3/search?${searchParams}`
-  );
-  if (!searchResult.ok) return searchResult;
-
-  const ids = (searchResult.data.items ?? [])
-    .map((item) => item?.id?.videoId)
-    .filter(Boolean);
-  const detailsResult = await loadVideoDetails(apiKey, ids);
-  if (!detailsResult.ok) return detailsResult;
-
-  const items = detailsResult.items
-    .filter((item) => item?.status?.privacyStatus === "public")
-    .filter((item) => !item?.liveStreamingDetails)
-    .map(normalizeVideo)
-    .sort((a, b) => b.viewCount - a.viewCount)
-    .slice(0, 3);
-
-  return { ok: true, items };
+  return { ok: true, items, scannedIds: orderedIds.length };
 }
 
 async function loadShowcase(apiKey, channelId) {
-  const [recentResult, topResult] = await Promise.all([
-    loadRecentUploadsDetailed(apiKey, channelId),
-    loadTopVideos(apiKey, channelId)
-  ]);
+  const uploadsResult = await loadUploadsDetailed(apiKey, channelId);
+  if (!uploadsResult.ok) return uploadsResult.response;
 
-  if (!recentResult.ok) return recentResult.response;
-  if (!topResult.ok) return topResult.response;
-
-  const shorts = recentResult.items
+  const shorts = uploadsResult.items
     .filter((item) => item.durationSeconds > 0 && item.durationSeconds <= 180)
     .slice(0, 3);
 
-  const long = recentResult.items
+  const long = uploadsResult.items
     .filter((item) => item.durationSeconds > 180)
+    .slice(0, 3);
+
+  const top = [...uploadsResult.items]
+    .filter((item) => item.viewCount > 0)
+    .sort((a, b) => b.viewCount - a.viewCount)
     .slice(0, 3);
 
   return json(
     {
       shorts,
-      top: topResult.items,
+      top,
       long,
-      shortRule: "duration_lte_180_seconds"
+      shortRule: "duration_lte_180_seconds",
+      topRule: "public_non_live_uploads_sorted_by_view_count",
+      scannedUploads: uploadsResult.scannedIds
     },
     200,
-    21600
+    3600
   );
 }
 
@@ -336,6 +309,7 @@ export async function onRequestGet(context) {
   const cacheUrl = new URL(requestUrl.origin + requestUrl.pathname);
   cacheUrl.searchParams.set("type", type);
   cacheUrl.searchParams.set("channel", channelName);
+  cacheUrl.searchParams.set("cache", CACHE_VERSION);
   const cacheKey = new Request(cacheUrl.toString(), { method: "GET" });
   const cache = caches.default;
 
