@@ -1,5 +1,6 @@
 const DATA_KEY = "tuzproba-media-kit";
-const SESSION_COOKIE = "tp_media_session";
+const ACCESS_COOKIE = "tp_media_access";
+const ADMIN_COOKIE = "tp_media_admin_session";
 const SESSION_TTL_SECONDS = 8 * 60 * 60;
 
 const DEFAULT_DATA = {
@@ -27,7 +28,6 @@ const DEFAULT_DATA = {
       { name: "Slovakia", share: 2.0 }
     ]
   },
-  featuredVideoIds: [],
   contact: {
     email: "paplovaggaming@gmail.com",
     channelUrl: "https://www.youtube.com/channel/UCdw9t0aw4TED_GV-ffWCQMg"
@@ -39,8 +39,9 @@ function json(data, status = 200, extraHeaders = {}) {
     status,
     headers: {
       "Content-Type": "application/json; charset=utf-8",
-      "Cache-Control": "no-store",
+      "Cache-Control": "private, no-store",
       "X-Content-Type-Options": "nosniff",
+      "X-Robots-Tag": "noindex, nofollow, noarchive",
       "Referrer-Policy": "no-referrer",
       ...extraHeaders
     }
@@ -53,7 +54,11 @@ function parseCookies(request) {
   for (const item of raw.split(";")) {
     const [name, ...rest] = item.trim().split("=");
     if (!name) continue;
-    result[name] = decodeURIComponent(rest.join("="));
+    try {
+      result[name] = decodeURIComponent(rest.join("="));
+    } catch {
+      result[name] = rest.join("=");
+    }
   }
   return result;
 }
@@ -97,13 +102,18 @@ async function createSession(secret) {
 
 async function verifySession(token, secret) {
   if (!token || !secret) return false;
-  const [encoded, signature] = token.split(".");
+  const [encoded, signature] = String(token).split(".");
   if (!encoded || !signature) return false;
+
   const expected = await hmac(encoded, secret);
   if (signature.length !== expected.length) return false;
+
   let mismatch = 0;
-  for (let i = 0; i < signature.length; i += 1) mismatch |= signature.charCodeAt(i) ^ expected.charCodeAt(i);
+  for (let i = 0; i < signature.length; i += 1) {
+    mismatch |= signature.charCodeAt(i) ^ expected.charCodeAt(i);
+  }
   if (mismatch !== 0) return false;
+
   try {
     const payload = JSON.parse(decodeBase64urlText(encoded));
     return Number(payload.exp) > Math.floor(Date.now() / 1000);
@@ -118,6 +128,18 @@ function sameOrigin(request) {
   return origin === new URL(request.url).origin;
 }
 
+function storage(env) {
+  return env.MEDIA_KIT_KV || env.KV || null;
+}
+
+function setCookie(name, value, maxAge = SESSION_TTL_SECONDS) {
+  return `${name}=${encodeURIComponent(value)}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${maxAge}`;
+}
+
+function clearCookie(name) {
+  return `${name}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`;
+}
+
 function clampNumber(value, min, max, fallback) {
   const number = Number(value);
   if (!Number.isFinite(number)) return fallback;
@@ -128,7 +150,6 @@ function cleanData(input) {
   const stats = input?.stats || {};
   const audience = input?.audience || {};
   const countries = Array.isArray(audience.countries) ? audience.countries : [];
-  const featured = Array.isArray(input?.featuredVideoIds) ? input.featuredVideoIds : [];
 
   return {
     version: 1,
@@ -140,7 +161,9 @@ function cleanData(input) {
       watchHours90d: Math.round(clampNumber(stats.watchHours90d, 0, 100000000000, DEFAULT_DATA.stats.watchHours90d)),
       impressions90d: Math.round(clampNumber(stats.impressions90d, 0, 1000000000000, DEFAULT_DATA.stats.impressions90d)),
       ctr: clampNumber(stats.ctr, 0, 100, DEFAULT_DATA.stats.ctr),
-      avgViewDuration: /^\d{1,3}:\d{2}$/.test(String(stats.avgViewDuration || "")) ? String(stats.avgViewDuration) : DEFAULT_DATA.stats.avgViewDuration,
+      avgViewDuration: /^\d{1,3}:\d{2}$/.test(String(stats.avgViewDuration || ""))
+        ? String(stats.avgViewDuration)
+        : DEFAULT_DATA.stats.avgViewDuration,
       subscriberGrowth90d: Math.round(clampNumber(stats.subscriberGrowth90d, -1000000000, 1000000000, DEFAULT_DATA.stats.subscriberGrowth90d))
     },
     audience: {
@@ -148,15 +171,14 @@ function cleanData(input) {
       coreAgeShare: clampNumber(audience.coreAgeShare, 0, 100, DEFAULT_DATA.audience.coreAgeShare),
       male: clampNumber(audience.male, 0, 100, DEFAULT_DATA.audience.male),
       female: clampNumber(audience.female, 0, 100, DEFAULT_DATA.audience.female),
-      countries: countries.slice(0, 6).map((country) => ({
-        name: String(country?.name || "").trim().slice(0, 40),
-        share: clampNumber(country?.share, 0, 100, 0)
-      })).filter((country) => country.name)
+      countries: countries
+        .slice(0, 6)
+        .map((country) => ({
+          name: String(country?.name || "").trim().slice(0, 40),
+          share: clampNumber(country?.share, 0, 100, 0)
+        }))
+        .filter((country) => country.name)
     },
-    featuredVideoIds: featured
-      .map((id) => String(id || "").trim())
-      .filter((id) => /^[A-Za-z0-9_-]{11}$/.test(id))
-      .slice(0, 6),
     contact: {
       email: String(input?.contact?.email || DEFAULT_DATA.contact.email).trim().slice(0, 160),
       channelUrl: DEFAULT_DATA.contact.channelUrl
@@ -165,9 +187,11 @@ function cleanData(input) {
 }
 
 async function loadData(env) {
-  if (!env.MEDIA_KIT_KV) return DEFAULT_DATA;
+  const kv = storage(env);
+  if (!kv) return DEFAULT_DATA;
+
   try {
-    const stored = await env.MEDIA_KIT_KV.get(DATA_KEY, "json");
+    const stored = await kv.get(DATA_KEY, "json");
     return stored || DEFAULT_DATA;
   } catch (error) {
     console.error("Media kit KV read failed", error);
@@ -175,9 +199,23 @@ async function loadData(env) {
   }
 }
 
-export async function onRequestGet({ env }) {
+async function hasAccess(request, env) {
+  const cookies = parseCookies(request);
+  return verifySession(cookies[ACCESS_COOKIE], env.MEDIA_KIT_PASSWORD);
+}
+
+async function isAdmin(request, env) {
+  const cookies = parseCookies(request);
+  return verifySession(cookies[ADMIN_COOKIE], env.MEDIA_KIT_ADMIN_PASSWORD);
+}
+
+export async function onRequestGet({ request, env }) {
+  if (!(await hasAccess(request, env))) {
+    return json({ error: "media_kit_access_required" }, 401);
+  }
+
   const data = await loadData(env);
-  return json({ data, storageConfigured: Boolean(env.MEDIA_KIT_KV) });
+  return json({ data, storageConfigured: Boolean(storage(env)) });
 }
 
 export async function onRequestPost({ request, env }) {
@@ -191,42 +229,57 @@ export async function onRequestPost({ request, env }) {
   }
 
   const action = String(body?.action || "");
-  const secret = env.MEDIA_KIT_PASSWORD;
 
-  if (action === "login") {
+  if (action === "access_login") {
+    const secret = env.MEDIA_KIT_PASSWORD;
     if (!secret) return json({ error: "password_not_configured" }, 503);
-    const supplied = String(body?.password || "");
-    if (supplied !== secret) return json({ error: "invalid_password" }, 401);
-    const token = await createSession(secret);
-    return json(
-      { ok: true, storageConfigured: Boolean(env.MEDIA_KIT_KV) },
-      200,
-      { "Set-Cookie": `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${SESSION_TTL_SECONDS}` }
-    );
-  }
+    if (String(body?.password || "") !== secret) return json({ error: "invalid_password" }, 401);
 
-  if (action === "logout") {
+    const token = await createSession(secret);
     return json(
       { ok: true },
       200,
-      { "Set-Cookie": `${SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0` }
+      { "Set-Cookie": setCookie(ACCESS_COOKIE, token) }
     );
   }
 
-  const cookies = parseCookies(request);
-  const authenticated = await verifySession(cookies[SESSION_COOKIE], secret);
-
-  if (action === "status") {
-    return json({ authenticated, storageConfigured: Boolean(env.MEDIA_KIT_KV) });
+  if (action === "access_logout") {
+    return json({ ok: true }, 200, { "Set-Cookie": clearCookie(ACCESS_COOKIE) });
   }
 
-  if (!authenticated) return json({ error: "not_authenticated" }, 401);
+  if (action === "admin_login") {
+    if (!(await hasAccess(request, env))) return json({ error: "media_kit_access_required" }, 401);
+
+    const secret = env.MEDIA_KIT_ADMIN_PASSWORD;
+    if (!secret) return json({ error: "admin_password_not_configured" }, 503);
+    if (String(body?.password || "") !== secret) return json({ error: "invalid_admin_password" }, 401);
+
+    const token = await createSession(secret);
+    return json(
+      { ok: true, storageConfigured: Boolean(storage(env)) },
+      200,
+      { "Set-Cookie": setCookie(ADMIN_COOKIE, token) }
+    );
+  }
+
+  if (action === "admin_logout") {
+    return json({ ok: true }, 200, { "Set-Cookie": clearCookie(ADMIN_COOKIE) });
+  }
+
+  if (action === "admin_status") {
+    const authenticated = await isAdmin(request, env);
+    return json({ authenticated, storageConfigured: Boolean(storage(env)) });
+  }
 
   if (action === "save") {
-    if (!env.MEDIA_KIT_KV) return json({ error: "storage_not_configured" }, 503);
+    if (!(await isAdmin(request, env))) return json({ error: "not_authenticated" }, 401);
+
+    const kv = storage(env);
+    if (!kv) return json({ error: "storage_not_configured" }, 503);
+
     const cleaned = cleanData(body?.data || {});
     try {
-      await env.MEDIA_KIT_KV.put(DATA_KEY, JSON.stringify(cleaned));
+      await kv.put(DATA_KEY, JSON.stringify(cleaned));
       return json({ ok: true, data: cleaned });
     } catch (error) {
       console.error("Media kit KV write failed", error);
