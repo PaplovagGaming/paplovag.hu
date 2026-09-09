@@ -3,7 +3,7 @@ const CHANNELS = {
   tuzproba: "UCdw9t0aw4TED_GV-ffWCQMg"
 };
 
-const CACHE_VERSION = "20260909-showcase-v2";
+const CACHE_VERSION = "20260909-showcase-v3";
 
 function json(data, status = 200, sharedCacheSeconds = 0) {
   const cacheControl = sharedCacheSeconds
@@ -83,7 +83,8 @@ function normalizeVideo(item) {
     thumbnailUrl: pickThumbnail(item?.snippet?.thumbnails),
     publishedAt: item?.snippet?.publishedAt ?? null,
     durationSeconds: parseIsoDurationSeconds(item?.contentDetails?.duration),
-    viewCount: Number(item?.statistics?.viewCount || 0)
+    viewCount: Number(item?.statistics?.viewCount || 0),
+    hasLiveStreamingDetails: Boolean(item?.liveStreamingDetails)
   };
 }
 
@@ -203,13 +204,14 @@ async function loadRecentVideos(apiKey, channelId) {
   return json({ items }, 200, 3600);
 }
 
-async function loadUploadsDetailed(apiKey, channelId, maxPages = 15) {
+async function loadUploadsDetailed(apiKey, channelId, maxPages = 50) {
   const uploadsResult = await getUploadsPlaylistId(apiKey, channelId);
   if (!uploadsResult.ok) return uploadsResult;
-  if (!uploadsResult.playlistId) return { ok: true, items: [], scannedIds: 0 };
+  if (!uploadsResult.playlistId) return { ok: true, items: [], scannedIds: 0, fullyScanned: true };
 
   const orderedIds = [];
   let pageToken = "";
+  let fullyScanned = false;
 
   for (let page = 0; page < maxPages; page += 1) {
     const params = new URLSearchParams({
@@ -231,7 +233,10 @@ async function loadUploadsDetailed(apiKey, channelId, maxPages = 15) {
     }
 
     pageToken = result.data.nextPageToken || "";
-    if (!pageToken) break;
+    if (!pageToken) {
+      fullyScanned = true;
+      break;
+    }
   }
 
   const detailsResult = await loadVideoDetails(apiKey, orderedIds);
@@ -242,21 +247,22 @@ async function loadUploadsDetailed(apiKey, channelId, maxPages = 15) {
     .map((id) => detailsById.get(id))
     .filter(Boolean)
     .filter((item) => item?.status?.privacyStatus === "public")
-    .filter((item) => !item?.liveStreamingDetails)
     .map(normalizeVideo);
 
-  return { ok: true, items, scannedIds: orderedIds.length };
+  return { ok: true, items, scannedIds: orderedIds.length, fullyScanned };
 }
 
 async function loadShowcase(apiKey, channelId) {
   const uploadsResult = await loadUploadsDetailed(apiKey, channelId);
   if (!uploadsResult.ok) return uploadsResult.response;
 
-  const shorts = uploadsResult.items
+  const recentNonLive = uploadsResult.items.filter((item) => !item.hasLiveStreamingDetails);
+
+  const shorts = recentNonLive
     .filter((item) => item.durationSeconds > 0 && item.durationSeconds <= 180)
     .slice(0, 3);
 
-  const long = uploadsResult.items
+  const long = recentNonLive
     .filter((item) => item.durationSeconds > 180)
     .slice(0, 3);
 
@@ -270,12 +276,13 @@ async function loadShowcase(apiKey, channelId) {
       shorts,
       top,
       long,
-      shortRule: "duration_lte_180_seconds",
-      topRule: "public_non_live_uploads_sorted_by_view_count",
-      scannedUploads: uploadsResult.scannedIds
+      shortRule: "duration_lte_180_seconds_non_live",
+      topRule: "all_public_uploads_sorted_by_view_count",
+      scannedUploads: uploadsResult.scannedIds,
+      fullyScanned: uploadsResult.fullyScanned
     },
     200,
-    3600
+    21600
   );
 }
 
