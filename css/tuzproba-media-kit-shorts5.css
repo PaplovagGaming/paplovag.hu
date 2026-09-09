@@ -1,0 +1,21 @@
+.tp-video-grid-shorts {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  justify-content: stretch;
+}
+
+@media (max-width: 900px) {
+  .tp-video-grid-shorts {
+    grid-template-columns: repeat(5, minmax(0, 230px));
+    overflow-x: auto;
+    justify-content: start;
+    padding-bottom: 8px;
+    scroll-snap-type: x proximity;
+  }
+}
+
+@media (max-width: 620px) {
+  .tp-video-grid-shorts {
+    grid-template-columns: repeat(5, minmax(0, 220px));
+    overflow-x: auto;
+  }
+}
