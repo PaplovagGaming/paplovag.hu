@@ -1,1 +1,1 @@
-import("/js/paplovag-media-kit-v2.js?v=3");
+import("/js/paplovag-media-kit-v3.js?v=1");
