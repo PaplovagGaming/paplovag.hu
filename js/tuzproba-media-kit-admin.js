@@ -68,15 +68,18 @@ function renderSyncInfo(data) {
   if (reach.status === "ready") {
     notes.push(`Reach data through ${reach.endDate}. Impressions / CTR refreshed via YouTube Reporting API.`);
   } else if (reach.status === "job_created") {
-    notes.push("Reach reporting job created. YouTube can take up to 24 hours to generate the first report; previous Impressions / CTR are kept until then.");
+    notes.push("Reach reporting job created. YouTube can take up to 48 hours to generate the first reports; previous Impressions / CTR are kept until enough reach history is available.");
   } else if (reach.status === "waiting_for_reports") {
     notes.push("Reach reports are not available yet; previous Impressions / CTR are kept and the next refresh will try again.");
   } else if (reach.status === "backfilling") {
     notes.push(`Reach history is backfilling (${reach.daysCached || 0} daily reports cached). Another refresh continues the backfill automatically.`);
   } else if (reach.status === "api_unavailable") {
     notes.push("YouTube Reporting API is not enabled or available for this Google Cloud project. Enable YouTube Reporting API, then refresh again.");
+  } else if (reach.status === "report_type_unavailable") {
+    notes.push("The connected YouTube channel does not currently expose a supported Reach report type through the Reporting API. Previous Impressions / CTR were kept.");
   } else if (reach.status === "error") {
-    notes.push("YouTube Reporting API returned an error; previous Impressions / CTR were kept.");
+    const detail = reach.error ? ` (${reach.errorStatus ? `HTTP ${reach.errorStatus}: ` : ""}${reach.error})` : "";
+    notes.push(`YouTube Reporting API returned an error${detail}; previous Impressions / CTR were kept.`);
   } else if (Array.isArray(sync.warnings) && sync.warnings.some((warning) => ["reach_metrics_preserved", "impressions_preserved", "ctr_preserved"].includes(warning))) {
     notes.push("Previous Impressions / CTR values were kept.");
   }
@@ -237,15 +240,18 @@ qs("youtube-refresh")?.addEventListener("click", async () => {
     if (reach.status === "ready") {
       setStatus("YouTube Analytics + Reach refreshed successfully.", "ok");
     } else if (reach.status === "job_created") {
-      setStatus("Core YouTube Analytics refreshed. Reach reporting job created; first reach reports can take up to 24 hours.", "ok");
+      setStatus("Core YouTube Analytics refreshed. Reach reporting job created; first reach reports can take up to 48 hours.", "ok");
     } else if (reach.status === "waiting_for_reports") {
       setStatus("Core YouTube Analytics refreshed. Reach reports are not available yet; the next refresh will try again.", "ok");
     } else if (reach.status === "backfilling") {
       setStatus("Core YouTube Analytics refreshed. Reach backfill is still in progress; press Refresh again to continue now, or let the daily job continue it.", "ok");
     } else if (reach.status === "api_unavailable") {
       setStatus("Core YouTube Analytics refreshed, but YouTube Reporting API must be enabled in Google Cloud before Impressions / CTR can update.", "error");
+    } else if (reach.status === "report_type_unavailable") {
+      setStatus("Core YouTube Analytics refreshed, but this channel does not currently expose a supported Reporting API Reach report type.", "error");
     } else if (reach.status === "error") {
-      setStatus("Core YouTube Analytics refreshed, but the reach report sync failed; previous Impressions / CTR were kept.", "error");
+      const detail = reach.error ? ` ${reach.errorStatus ? `HTTP ${reach.errorStatus}: ` : ""}${reach.error}` : "";
+      setStatus(`Core YouTube Analytics refreshed, but the reach report sync failed.${detail}`, "error");
     } else {
       setStatus("YouTube Analytics refreshed successfully.", "ok");
     }
