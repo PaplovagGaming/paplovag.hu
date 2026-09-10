@@ -1,6 +1,6 @@
 const ACCESS_COOKIE = "pg_media_access";
 const TOKEN_KEY = "paplovag-youtube-oauth-refresh-token";
-const CACHE_KEY = "paplovag-youtube-showcase-v6";
+const CACHE_KEY = "paplovag-youtube-showcase-v7";
 const TARGET_CHANNEL_ID = "UCUEDPQyLPN5lrTH06k2oWYA";
 const TECH_PLAYLIST_ID = "PLrH3C01Hh-gnG5Qs_Xwe3z2yxMFYSwFWh";
 const GAMING_PLAYLIST_ID = "PLrH3C01Hh-gk7hkFKyO7wwne6FYEhdAup";
@@ -96,7 +96,7 @@ async function getAccessToken(env, refreshToken) {
   return payload.access_token;
 }
 async function googleJson(url, token) {
-  const response = await fetch(url, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } });
+  const response = await fetch(url, { signal: AbortSignal.timeout(20000), headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } });
   let payload = {};
   try { payload = await response.json(); } catch {}
   if (!response.ok) {
@@ -170,20 +170,10 @@ async function recentUploadIds(token, uploadsPlaylistId, maxPages = 4) {
   return ids;
 }
 
-async function isShortByAnalytics(token, video, channelStartDate, endDate) {
-  const published = String(video?.snippet?.publishedAt || "").slice(0, 10);
-  const startDate = maxDate(maxDate(channelStartDate, "2019-01-01"), published || channelStartDate);
-  if (!video?.id || startDate > endDate) return false;
-  const q = new URLSearchParams({
-    ids: "channel==MINE",
-    startDate,
-    endDate,
-    metrics: "views",
-    dimensions: "creatorContentType",
-    filters: `video==${video.id}`
-  });
-  const report = await googleJson(`https://youtubeanalytics.googleapis.com/v2/reports?${q}`, token);
-  return reportRows(report).some(row => row.creatorContentType === "SHORTS");
+async function shortsByAnalytics(token, candidates, channelStartDate, endDate) {
+  const q = new URLSearchParams({ ids: "channel==MINE", startDate: maxDate(channelStartDate, "2019-01-01"), endDate, metrics: "views", dimensions: "video,creatorContentType", filters: "video==" + candidates.map(v => v.id).join(","), maxResults: "200" });
+  const report = await googleJson("https://youtubeanalytics.googleapis.com/v2/reports?" + q, token);
+  return new Set(reportRows(report).filter(row => row.creatorContentType === "SHORTS").map(row => row.video));
 }
 
 function portraitFromFileDetails(item) {
@@ -192,7 +182,10 @@ function portraitFromFileDetails(item) {
   let width = Number(stream.widthPixels);
   let height = Number(stream.heightPixels);
   if (stream.rotation === "clockwise" || stream.rotation === "counterClockwise") [width, height] = [height, width];
-  return width > 0 && height / width >= 1.5;
+  const published = String(item?.snippet?.publishedAt || "").slice(0, 10);
+  const maxDuration = published >= "2024-10-15" ? 180 : 60;
+  const duration = parseDuration(item?.contentDetails?.duration);
+  return width > 0 && height >= width && duration > 0 && duration <= maxDuration;
 }
 
 async function latestShorts(token, uploadsPlaylistId, channelStartDate, endDate) {
@@ -208,39 +201,24 @@ async function latestShorts(token, uploadsPlaylistId, channelStartDate, endDate)
       const duration = parseDuration(item?.contentDetails?.duration);
       return duration > 0 && duration <= 180;
     })
-    .slice(0, 40);
-
-  const shorts = [];
-  let analyticsErrors = 0;
-  for (let i = 0; i < candidates.length && shorts.length < 5; i += 6) {
-    const batch = candidates.slice(i, i + 6);
-    const checks = await Promise.all(batch.map(async item => {
-      try { return { item, isShort: await isShortByAnalytics(token, item, channelStartDate, endDate) }; }
-      catch { analyticsErrors += 1; return { item, isShort: false }; }
-    }));
-    for (const check of checks) {
-      if (check.isShort && !shorts.some(v => v.id === check.item.id)) shorts.push(publicVideo(check.item));
-      if (shorts.length >= 5) break;
-    }
-  }
-
-  let method = "analytics_creatorContentType";
-  if (shorts.length < 5) {
+    .sort((a, b) => Date.parse(b.snippet.publishedAt) - Date.parse(a.snippet.publishedAt))
+    .slice(0, 100);
+  if (!candidates.length) return { items: [], method: "no_candidates", checkedCandidates: 0, analyticsErrors: 0 };
+  let recognized = new Set(), analyticsError = null, fileError = null;
+  try { recognized = await shortsByAnalytics(token, candidates, channelStartDate, endDate); }
+  catch (error) { analyticsError = error; }
+  // Include new uploads without Analytics rows, even when five older Shorts exist.
+  const unknown = candidates.filter(item => !recognized.has(item.id));
+  if (unknown.length) {
     try {
-      const withFiles = await videoDetails(token, candidates.map(item => item.id), "snippet,contentDetails,statistics,status,liveStreamingDetails,fileDetails");
-      const fileMap = new Map(withFiles.map(item => [item.id, item]));
-      for (const candidate of candidates) {
-        if (shorts.length >= 5) break;
-        if (shorts.some(v => v.id === candidate.id)) continue;
-        const item = fileMap.get(candidate.id);
-        if (item && portraitFromFileDetails(item)) shorts.push(publicVideo(item));
-      }
-      if (shorts.length) method += "+owner_fileDetails_fallback";
-    } catch {}
+      const withFiles = await videoDetails(token, unknown.map(item => item.id), "snippet,contentDetails,fileDetails");
+      for (const item of withFiles) if (portraitFromFileDetails(item)) recognized.add(item.id);
+      if (withFiles.some(item => !item.fileDetails?.videoStreams?.length)) fileError = new Error("YouTube fileDetails unavailable for some Shorts candidates");
+    } catch (error) { fileError = error; }
   }
-
-  shorts.sort((a, b) => Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0));
-  return { items: shorts.slice(0, 5), method, checkedCandidates: candidates.length, analyticsErrors };
+  const items = candidates.filter(item => recognized.has(item.id)).slice(0, 5).map(publicVideo);
+  if (!items.length && (analyticsError || fileError)) throw new Error([analyticsError, fileError].filter(Boolean).map(cleanError).join("; "));
+  return { items, method: "batched_analytics_and_owner_dimensions", checkedCandidates: candidates.length, analyticsErrors: analyticsError ? 1 : 0, warning: [analyticsError, fileError].filter(Boolean).map(cleanError).join("; ") };
 }
 
 async function lifetimeTop(token, startDate, endDate) {
@@ -305,7 +283,7 @@ async function safeSection(name, task, fallback, status, errors) {
   }
 }
 
-async function build(env, kv, previous = null) {
+async function build(env, kv, previous = null, section = "all", cacheKey = CACHE_KEY) {
   const secret = adminSecret(env);
   if (!env.YOUTUBE_OAUTH_CLIENT_ID || !env.YOUTUBE_OAUTH_CLIENT_SECRET || !secret) throw new Error("oauth_secrets_missing");
   const record = await kv.get(TOKEN_KEY, "json");
@@ -324,14 +302,15 @@ async function build(env, kv, previous = null) {
   const sectionErrors = {};
 
   const [shortResult, top, tech, gaming] = await Promise.all([
-    safeSection("shorts", () => latestShorts(token, uploadsPlaylistId, startDate, endDate), { items: previous?.shorts || [], method: "cached_fallback", checkedCandidates: 0, analyticsErrors: 0 }, sectionStatus, sectionErrors),
-    safeSection("top", () => lifetimeTop(token, startDate, endDate), previous?.top || [], sectionStatus, sectionErrors),
-    safeSection("tech", () => playlistSection(token, TECH_PLAYLIST_ID), previous?.tech || { playlistId: TECH_PLAYLIST_ID, totalVideos: 0, top: [], latest: [] }, sectionStatus, sectionErrors),
-    safeSection("gaming", () => playlistSection(token, GAMING_PLAYLIST_ID), previous?.gaming || { playlistId: GAMING_PLAYLIST_ID, totalVideos: 0, top: [], latest: [] }, sectionStatus, sectionErrors)
+    section === "videos" ? { items: [] } : safeSection("shorts", () => latestShorts(token, uploadsPlaylistId, startDate, endDate), { items: previous?.shorts || [], method: "cached_fallback", checkedCandidates: 0, analyticsErrors: 0 }, sectionStatus, sectionErrors),
+    section === "shorts" ? null : safeSection("top", () => lifetimeTop(token, startDate, endDate), previous?.top || [], sectionStatus, sectionErrors),
+    section === "shorts" ? null : safeSection("tech", () => playlistSection(token, TECH_PLAYLIST_ID), previous?.tech || { playlistId: TECH_PLAYLIST_ID, totalVideos: 0, top: [], latest: [] }, sectionStatus, sectionErrors),
+    section === "shorts" ? null : safeSection("gaming", () => playlistSection(token, GAMING_PLAYLIST_ID), previous?.gaming || { playlistId: GAMING_PLAYLIST_ID, totalVideos: 0, top: [], latest: [] }, sectionStatus, sectionErrors)
   ]);
 
+  if (shortResult.warning) { sectionStatus.shorts = "error"; sectionErrors.shorts = shortResult.warning; }
   const result = {
-    version: 6,
+    version: 7,
     shorts: shortResult.items,
     top,
     tech,
@@ -348,7 +327,7 @@ async function build(env, kv, previous = null) {
   };
 
   const hasErrors = Object.values(sectionStatus).some(value => value === "error");
-  await kv.put(CACHE_KEY, JSON.stringify(result), { expirationTtl: hasErrors ? PARTIAL_CACHE_TTL_SECONDS : CACHE_TTL_SECONDS });
+  await kv.put(cacheKey, JSON.stringify(result), { expirationTtl: hasErrors ? PARTIAL_CACHE_TTL_SECONDS : CACHE_TTL_SECONDS });
   return result;
 }
 
@@ -359,16 +338,19 @@ export async function onRequestGet({ request, env }) {
   const kv = storage(env);
   if (!kv) return json({ error: "storage_not_configured" }, 503);
 
+  const requested = new URL(request.url).searchParams.get("section");
+  const section = ["shorts", "videos"].includes(requested) ? requested : "all";
+  const cacheKey = `${CACHE_KEY}:${section}`;
   let cached = null;
-  try { cached = await kv.get(CACHE_KEY, "json"); } catch {}
+  try { cached = await kv.get(cacheKey, "json"); } catch {}
   const force = new URL(request.url).searchParams.get("refresh") === "1";
-  if (!force && cached?.version === 6) return json(cached);
+  if (!force && cached?.version === 7) return json(cached);
 
   try {
-    return json(await build(env, kv, cached));
+    return json(await build(env, kv, cached, section, cacheKey));
   } catch (error) {
     console.error("Paplovag showcase core refresh failed", error);
-    if (cached?.version === 6) return json({ ...cached, stale: true, coreError: cleanError(error) });
+    if (cached?.version === 7) return json({ ...cached, stale: true, coreError: cleanError(error) });
     const code = String(error.message || "showcase_failed");
     const status = code === "wrong_youtube_channel" ? 409 : code.includes("missing") || code.includes("not_configured") ? 503 : 502;
     return json({ error: code }, status);
