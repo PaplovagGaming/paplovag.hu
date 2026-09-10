@@ -6,7 +6,7 @@ const TARGET_CHANNEL_ID = "UCUEDPQyLPN5lrTH06k2oWYA";
 const TIME_ZONE = "Europe/Budapest";
 const REACH_REPORT_TYPE_IDS = ["channel_reach_basic_a1", "channel_reach_combined_a1"];
 const REACH_JOB_NAME = "Paplovag Gaming Media Kit Reach";
-const REACH_BATCH_SIZE = 12;
+const REACH_BATCH_SIZE = 30;
 const REACH_HISTORY_DAYS = 180;
 const REACH_WINDOW_DAYS = 90;
 
@@ -169,6 +169,7 @@ async function decryptRefreshToken(record, secret) {
 async function getAccessToken(env, refreshToken) {
   const response = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
+    signal: AbortSignal.timeout(20000),
     headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
     body: new URLSearchParams({
       client_id: env.YOUTUBE_OAUTH_CLIENT_ID,
@@ -179,13 +180,20 @@ async function getAccessToken(env, refreshToken) {
   });
   let payload = {};
   try { payload = await response.json(); } catch {}
-  if (!response.ok || !payload.access_token) throw new Error("oauth_refresh_failed");
+  if (!response.ok || !payload.access_token) {
+    const error = new Error(payload.error_description || payload.error?.message || payload.error || "Google returned no access token");
+    error.code = "oauth_refresh_failed";
+    error.status = response.status;
+    error.reason = typeof payload.error === "string" ? payload.error : "oauth_refresh_failed";
+    throw error;
+  }
   return payload.access_token;
 }
 
 async function googleJson(url, accessToken, init = {}) {
   const response = await fetch(url, {
     ...init,
+    signal: AbortSignal.timeout(20000),
     headers: {
       Authorization: `Bearer ${accessToken}`,
       Accept: "application/json",
@@ -205,6 +213,7 @@ async function googleJson(url, accessToken, init = {}) {
 
 async function googleText(url, accessToken) {
   const response = await fetch(url, {
+    signal: AbortSignal.timeout(20000),
     headers: { Authorization: `Bearer ${accessToken}`, Accept: "text/csv,text/plain,*/*" }
   });
   if (!response.ok) {
@@ -329,44 +338,59 @@ function parseCsv(text) {
   );
 }
 
-function normalizeCtrPercent(value) {
-  const number = Number(value);
-  if (!Number.isFinite(number) || number < 0) return null;
-  return number <= 1 ? number * 100 : number;
+function normalizeReportDate(value) {
+  const raw = String(value || "").trim();
+  const date = /^\d{8}$/.test(raw) ? raw.replace(/^(\d{4})(\d{2})(\d{2})$/, "$1-$2-$3") : raw.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Invalid reach report date: " + raw);
+  const parsed = new Date(date + "T12:00:00Z");
+  if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date) throw new Error("Invalid reach report date: " + raw);
+  return date;
 }
 
 function aggregateReachCsv(text, fallbackDate) {
+  const required = ["date", "channel_id", "video_thumbnail_impressions", "video_thumbnail_impressions_ctr"];
+  const headers = String(text).replace(/^\uFEFF/, "").split(/\r?\n/, 1)[0].split(",").map(v => v.trim().replace(/^"|"$/g, ""));
+  if (!required.every(key => headers.includes(key))) throw new Error("Reach CSV is missing required columns");
+  const rows = parseCsv(text);
   const daily = {};
-  for (const row of parseCsv(text)) {
-    if (row.channel_id && row.channel_id !== TARGET_CHANNEL_ID) continue;
-    const date = String(row.date || fallbackDate || "").slice(0, 10);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
-    const impressions = Math.max(0, Number(row.video_thumbnail_impressions) || 0);
-    const ctrPercent = normalizeCtrPercent(row.video_thumbnail_impressions_ctr);
+  for (const row of rows) {
+    if (row.channel_id !== TARGET_CHANNEL_ID) throw new Error("Reach CSV belongs to a different YouTube channel");
+    const date = normalizeReportDate(row.date || fallbackDate);
+    if (date !== normalizeReportDate(fallbackDate)) throw new Error("Reach CSV date does not match report day");
+    const impressions = Number(row.video_thumbnail_impressions);
+    // Reporting API defines CTR as a percentage, including values below 1%.
+    const ctr = Number(row.video_thumbnail_impressions_ctr);
+    if (!row.video_thumbnail_impressions.trim() || !Number.isFinite(impressions) || impressions < 0 || !Number.isFinite(ctr) || ctr < 0 || ctr > 100 || (impressions > 0 && !row.video_thumbnail_impressions_ctr.trim())) throw new Error("Invalid reach CSV metrics");
     if (!daily[date]) daily[date] = { impressions: 0, ctrWeighted: 0 };
     daily[date].impressions += impressions;
-    if (ctrPercent !== null && impressions > 0) {
-      daily[date].ctrWeighted += impressions * ctrPercent;
-    }
+    daily[date].ctrWeighted += impressions * ctr;
   }
+  // A valid header-only daily report means zero activity, not a missing day.
+  if (!rows.length) daily[normalizeReportDate(fallbackDate)] = { impressions: 0, ctrWeighted: 0 };
   return daily;
 }
 
-async function listJobs(accessToken) {
-  const params = new URLSearchParams({ pageSize: "100", includeSystemManaged: "true" });
-  const payload = await googleJson(`https://youtubereporting.googleapis.com/v1/jobs?${params}`, accessToken);
-  return payload.jobs || [];
+async function reportingList(accessToken, resource, key, maxPages = 4) {
+  const items = [];
+  let pageToken = "";
+  for (let page = 0; page < maxPages; page += 1) {
+    const params = new URLSearchParams({ pageSize: "100" });
+    if (key !== "reports") params.set("includeSystemManaged", "true");
+    if (pageToken) params.set("pageToken", pageToken);
+    const payload = await googleJson("https://youtubereporting.googleapis.com/v1/" + resource + "?" + params, accessToken);
+    items.push(...(payload[key] || []));
+    pageToken = payload.nextPageToken || "";
+    if (!pageToken) return items;
+  }
+  throw new Error("Reporting API pagination limit exceeded for " + key);
 }
 
-async function listReportTypes(accessToken) {
-  const params = new URLSearchParams({ pageSize: "100", includeSystemManaged: "true" });
-  const payload = await googleJson(`https://youtubereporting.googleapis.com/v1/reportTypes?${params}`, accessToken);
-  return payload.reportTypes || [];
-}
+const listJobs = token => reportingList(token, "jobs", "jobs", 3);
+const listReportTypes = token => reportingList(token, "reportTypes", "reportTypes", 3);
 
 async function ensureReachJob(accessToken) {
   const jobs = await listJobs(accessToken);
-  const existing = jobs.find((job) => REACH_REPORT_TYPE_IDS.includes(job.reportTypeId));
+  const existing = jobs.find((job) => REACH_REPORT_TYPE_IDS.includes(job.reportTypeId) && !job.expireTime);
   if (existing) return { job: existing, created: false, reportTypeId: existing.reportTypeId };
 
   const reportTypes = await listReportTypes(accessToken);
@@ -386,22 +410,28 @@ async function ensureReachJob(accessToken) {
     throw error;
   }
 
-  const job = await googleJson("https://youtubereporting.googleapis.com/v1/jobs", accessToken, {
+  let job;
+  try {
+    job = await googleJson("https://youtubereporting.googleapis.com/v1/jobs", accessToken, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ reportTypeId: selected.id, name: REACH_JOB_NAME })
   });
+  } catch (error) {
+    if (error.status === 409) {
+      job = (await listJobs(accessToken)).find(item => item.reportTypeId === selected.id && !item.expireTime);
+      if (job) return { job, created: false, reportTypeId: selected.id };
+    }
+    throw error;
+  }
   return { job, created: true, reportTypeId: selected.id };
 }
 
 async function listReports(accessToken, jobId, analyticsEndDate) {
-  const payload = await googleJson(
-    `https://youtubereporting.googleapis.com/v1/jobs/${encodeURIComponent(jobId)}/reports?pageSize=100`,
-    accessToken
-  );
+  const reports = await reportingList(accessToken, `jobs/${encodeURIComponent(jobId)}/reports`, "reports");
   const minDate = shiftDate(analyticsEndDate, -(REACH_HISTORY_DAYS - 1));
   const newestByDate = new Map();
-  for (const report of payload.reports || []) {
+  for (const report of reports) {
     const date = String(report.startTime || "").slice(0, 10);
     if (!date || date < minDate || date > analyticsEndDate) continue;
     const previous = newestByDate.get(date);
@@ -429,28 +459,37 @@ function pruneHistory(history, endDate) {
   }
 }
 
-async function processReports(accessToken, reports, history) {
+async function processReports(accessToken, reports, history, kv) {
   const pending = reports
     .filter((report) => {
       const date = String(report.startTime || "").slice(0, 10);
-      return date && history.days?.[date]?.reportId !== report.id;
+      return date && (history.days?.[date]?.reportId !== report.id || history.days?.[date]?.parserVersion !== 2);
     })
     .slice(0, REACH_BATCH_SIZE);
 
   let processed = 0;
   for (const report of pending) {
     const fallbackDate = String(report.startTime || "").slice(0, 10);
-    const daily = aggregateReachCsv(await googleText(report.downloadUrl, accessToken), fallbackDate);
+    let daily;
+    try {
+      daily = aggregateReachCsv(await googleText(report.downloadUrl, accessToken), fallbackDate);
+    } catch (error) {
+      error.reportsProcessedThisRun = processed;
+      if (processed) await kv.put(REACH_HISTORY_KEY, JSON.stringify(history));
+      throw error;
+    }
     for (const [date, values] of Object.entries(daily)) {
       history.days[date] = {
         impressions: Math.round(Number(values.impressions) || 0),
         ctrWeighted: Number(values.ctrWeighted) || 0,
+        parserVersion: 2,
         reportId: report.id || "",
         reportCreateTime: report.createTime || "",
         syncedAt: new Date().toISOString()
       };
     }
     processed += 1;
+    history.updatedAt = new Date().toISOString();
   }
   return processed;
 }
@@ -463,7 +502,7 @@ function findReachWindow(history, analyticsEndDate) {
     let complete = true;
     for (let i = 0; i < REACH_WINDOW_DAYS; i += 1) {
       const item = history.days?.[shiftDate(startDate, i)];
-      if (!item) {
+      if (!item || item.parserVersion !== 2) {
         complete = false;
         break;
       }
@@ -494,28 +533,35 @@ function classifyReachError(error) {
 
 async function syncReach({ accessToken, kv, analyticsEndDate, stats }) {
   const attemptedAt = new Date().toISOString();
+  const history = await loadReachHistory(kv);
+  pruneHistory(history, analyticsEndDate);
+  const cachedDays = () => Object.values(history.days).filter(day => day.parserVersion === 2).length;
+  let jobInfo = {};
   try {
     const { job, created, reportTypeId } = await ensureReachJob(accessToken);
     if (!job?.id) throw new Error("reach_job_missing_id");
+    jobInfo = { jobId: job.id, reportTypeId };
+    history.jobId = job.id;
+    history.reportTypeId = reportTypeId;
 
     if (created) {
-      return { status: "job_created", jobId: job.id, reportTypeId, lastAttemptAt: attemptedAt, reportsProcessedThisRun: 0, daysCached: 0 };
+      await kv.put(REACH_HISTORY_KEY, JSON.stringify(history));
+      return { status: "job_created", jobId: job.id, reportTypeId, lastAttemptAt: attemptedAt, reportsProcessedThisRun: 0, daysCached: cachedDays() };
     }
 
     const reports = await listReports(accessToken, job.id, analyticsEndDate);
-    const history = await loadReachHistory(kv);
     if (!reports.length) {
-      return { status: "waiting_for_reports", jobId: job.id, reportTypeId, lastAttemptAt: attemptedAt, reportsProcessedThisRun: 0, daysCached: Object.keys(history.days || {}).length };
+      return { status: "waiting_for_reports", jobId: job.id, reportTypeId, lastAttemptAt: attemptedAt, reportsProcessedThisRun: 0, daysCached: cachedDays() };
     }
 
-    const processed = await processReports(accessToken, reports, history);
+    const processed = await processReports(accessToken, reports, history, kv);
     pruneHistory(history, analyticsEndDate);
     history.version = 1;
     history.updatedAt = new Date().toISOString();
     await kv.put(REACH_HISTORY_KEY, JSON.stringify(history));
 
     const window = findReachWindow(history, analyticsEndDate);
-    const daysCached = Object.keys(history.days || {}).length;
+    const daysCached = cachedDays();
     if (window) {
       stats.impressions90d = window.impressions;
       stats.ctr = window.ctr;
@@ -527,8 +573,10 @@ async function syncReach({ accessToken, kv, analyticsEndDate, stats }) {
     return {
       status: classifyReachError(error),
       lastAttemptAt: attemptedAt,
-      reportsProcessedThisRun: 0,
-      daysCached: 0,
+      ...jobInfo,
+      reportsProcessedThisRun: error.reportsProcessedThisRun || 0,
+      daysCached: cachedDays(),
+      errorCode: String(error.code || error.reason || "reach_reporting_error"),
       errorStatus: Number(error.status) || null,
       error: String(error.message || error.reason || "reach_reporting_error").slice(0, 240)
     };
@@ -629,8 +677,8 @@ export async function onRequestPost({ request, env }) {
     return json({ ok: true, triggeredBy: authorizedAs, ...(await refreshMediaKit(env)) });
   } catch (error) {
     console.error("Paplovag YouTube Analytics refresh failed", error.message);
-    const code = String(error.message || "refresh_failed");
+    const code = String(error.code || error.message || "refresh_failed");
     const status = code === "wrong_youtube_channel" ? 409 : code.includes("missing") || code.includes("not_configured") ? 503 : 502;
-    return json({ error: code }, status);
+    return json({ ok: false, error: code, message: String(error.message || code), googleStatus: error.status || null, reason: error.reason || null }, status);
   }
 }

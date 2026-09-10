@@ -18,17 +18,25 @@ function budapestTime(date) {
 async function refreshOne(env, target) {
   const response = await fetch(target.url, {
     method: "POST",
+    signal: AbortSignal.timeout(120000),
     headers: {
       Authorization: `Bearer ${env.MEDIA_KIT_CRON_SECRET}`,
       Accept: "application/json"
     }
   });
   const text = await response.text();
+  let payload;
+  try { payload = JSON.parse(text); } catch {}
+  const reach = payload?.data?.youtubeReachSync;
+  const reachFailed = ["error", "api_unavailable", "report_type_unavailable", "rate_limited"].includes(reach?.status);
   return {
     name: target.name,
-    ok: response.ok,
+    ok: response.ok && payload?.ok === true && !reachFailed,
     status: response.status,
-    body: text.slice(0, 300)
+    lastSuccessAt: payload?.data?.youtubeSync?.lastSuccessAt || null,
+    reachStatus: reach?.status || null,
+    daysCached: reach?.daysCached ?? null,
+    error: reach?.error || payload?.message || payload?.error || (!payload ? text.slice(0, 300) : null)
   };
 }
 
@@ -36,8 +44,13 @@ async function runRefreshes(env) {
   if (!env.MEDIA_KIT_CRON_SECRET) throw new Error("MEDIA_KIT_CRON_SECRET is not configured");
   const results = [];
   for (const target of TARGETS) {
-    results.push(await refreshOne(env, target));
+    try {
+      results.push(await refreshOne(env, target));
+    } catch (error) {
+      results.push({ name: target.name, ok: false, error: error.message });
+    }
   }
+  console.log("Media Kit refresh results", JSON.stringify(results));
   const failed = results.filter((result) => !result.ok);
   if (failed.length) console.error("Media Kit refresh failures", failed);
   return results;
@@ -48,7 +61,9 @@ export default {
     const at = new Date(controller.scheduledTime || Date.now());
     const local = budapestTime(at);
     if (local.hour !== 0 || local.minute !== 1) return;
-    ctx.waitUntil(runRefreshes(env));
+    ctx.waitUntil(runRefreshes(env).then(results => {
+      if (results.some(result => !result.ok)) throw new Error("Media Kit refresh failed: " + JSON.stringify(results));
+    }));
   },
 
   async fetch(request, env) {
