@@ -11,8 +11,8 @@ const csv = (date, ctr = 0.5) => `${headers}\n${date},${channel},v,100,${ctr}\n`
 const json = (value, status = 200) => new Response(JSON.stringify(value), { status });
 function api(fetch) {
   const context = vm.createContext({ fetch, Response, Request, URL, URLSearchParams, AbortSignal, TextEncoder, TextDecoder, crypto: webcrypto, btoa, atob, structuredClone, console, Intl });
-  vm.runInContext(source.replace('export async function onRequestPost', 'async function onRequestPost'), context);
-  return vm.runInContext('({ aggregateReachCsv, syncReach, onRequestPost, getAccessToken })', context);
+  vm.runInContext(source.replace('export async function onRequestPost', 'async function onRequestPost').replace('export function applyAvailableReach', 'function applyAvailableReach'), context);
+  return vm.runInContext('({ aggregateReachCsv, syncReach, onRequestPost, getAccessToken, applyAvailableReach })', context);
 }
 function kv(initial = {}) {
   const values = new Map(Object.entries(initial));
@@ -47,7 +47,8 @@ test('paginated history advances across runs, reaches 90 days and never touches 
     const result=await syncReach({accessToken:'test',kv:store,analyticsEndDate:'2026-09-09',stats});
     assert.equal(result.daysCached,expected);
     assert.equal(result.status,expected===90?'ready':'backfilling');
-    if (expected<90) assert.equal(stats.impressions90d,7);
+    assert.equal(stats.impressions90d,expected * 100);
+    assert.equal(result.windowDays,expected);
   }
   assert.equal(stats.impressions90d,9000);
   assert.equal(stats.ctr,0.5);
@@ -70,7 +71,8 @@ test('partial downloads survive Google errors and retain the concrete error', as
   assert.equal(result.reportsProcessedThisRun,2);
   assert.match(result.error,/Google quota exceeded/);
   assert.equal(Object.keys(store.values.get('paplovag-youtube-reach-history').days).length,2);
-  assert.equal(stats.impressions90d,55);
+  assert.equal(stats.impressions90d,200);
+  assert.equal(result.windowDays,2);
 });
 
 test('job creation is saved in Paplovag history and missing report types fail explicitly', async()=>{
@@ -125,6 +127,29 @@ test('refresh authorization, token namespace and Google OAuth error details',asy
 });
 
 const cronSource=await readFile(new URL('../cloudflare/media-kit-cron-worker.js',import.meta.url),'utf8');
+test('existing cached history is displayed on load without a Google refresh, with the actual public period',async()=>{
+  const history={days:Object.fromEntries(dates.slice(0,30).map(date=>[date,{parserVersion:2,impressions:100,ctrWeighted:50}]))};
+  const store=kv({'paplovag-media-kit':{stats:{impressions90d:0,ctr:0},youtubeSync:{analyticsEndDate:'2026-09-09'}},'paplovag-youtube-reach-history':history});
+  const context=vm.createContext({applyAvailableReach:api().applyAvailableReach,structuredClone,console});
+  const dataSource=await readFile(new URL('../functions/api/paplovag-media-kit.js',import.meta.url),'utf8');
+  vm.runInContext(dataSource.replace(/^import[^\n]+\n/,'').replaceAll('export async function','async function'),context);
+  const data=await context.loadData({MEDIA_KIT_KV:store});
+  assert.equal(data.stats.impressions90d,3000);
+  assert.equal(data.stats.ctr,0.5);
+  assert.equal(data.youtubeReachSync.windowDays,30);
+  assert.equal(store.writes.length,0);
+  const js=await readFile(new URL('../js/paplovag-media-kit-v4.js',import.meta.url),'utf8');
+  const nodes=new Map();const byId=id=>{if(!nodes.has(id))nodes.set(id,{style:{setProperty(){}}});return nodes.get(id);};
+  const ui=vm.createContext({byId,activeLang:'en',translations:{en:{stats:{hours:'hrs',last90:'Last 90 days'}}},dateText:String,compact:String,pct:String,fallbackData:{contact:{}},escapeHtml:String});
+  vm.runInContext(js.slice(js.indexOf('function renderData('),js.indexOf('function videoCard(')),ui);
+  ui.renderData(data);
+  assert.equal(byId('stat-impressions90').textContent,'3000');
+  assert.equal(byId('stat-ctr').textContent,'0.50%');
+  assert.equal(byId('card-impressions90').hidden,false);
+  assert.match(byId('reach-impressions-period').textContent,/30 days · 2026-08-11 – 2026-09-09/);
+  const gap=api().applyAvailableReach({stats:{}},{days:{...history.days,'2026-09-08':undefined}},'2026-09-09');
+  assert.equal(gap.youtubeReachSync.windowDays,1);
+});
 test('cron attempts both channels after network failure, rejects failed runs, handles Budapest summer/winter',async()=>{
   for (const at of ['2026-09-09T22:01:00Z','2026-12-09T23:01:00Z']) {
     const calls=[];
@@ -169,3 +194,4 @@ test('admin click displays progress beside the button and a concrete Google erro
   assert.match(get('youtube-refresh-status').textContent,/30 days cached/);
   assert.equal(get('youtube-refresh').disabled,false);
 });
+

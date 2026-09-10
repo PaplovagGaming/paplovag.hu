@@ -1,5 +1,6 @@
 const apiUrl="/api/paplovag-media-kit";const youtubeRefreshUrl="/api/paplovag-youtube-analytics-refresh";let currentData=null;const qs=id=>document.getElementById(id);function setStatus(message,type=""){const el=qs("admin-status");if(!el)return;el.textContent=message;el.className=`pg-status ${type}`.trim()}async function api(body){const response=await fetch(apiUrl,{method:"POST",headers:{"Content-Type":"application/json",Accept:"application/json"},credentials:"same-origin",body:JSON.stringify(body)});let payload={};try{payload=await response.json()}catch{}if(!response.ok){const e=new Error(payload.error||`HTTP ${response.status}`);e.code=payload.error;throw e}return payload}async function loadData(){const response=await fetch(apiUrl,{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"});if(!response.ok)throw new Error("Could not load media kit data.");return response.json()}function formatSyncTime(value){if(!value)return"Not yet refreshed";try{return new Intl.DateTimeFormat("hu-HU",{timeZone:"Europe/Budapest",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"}).format(new Date(value))}catch{return value}}function ensureCountryFields(){const host=qs("countries-fields");if(!host||host.children.length)return;for(let i=1;i<=6;i++){const wrap=document.createElement("div");wrap.className="pg-field";wrap.innerHTML=`<label for="country${i}Name">Country ${i}</label><input class="pg-input" id="country${i}Name" type="text"><input class="pg-input" id="country${i}Share" type="number" min="0" max="100" step="0.01" placeholder="Share %">`;host.appendChild(wrap)}}function reachMessage(reach = {}) {
   const days = Number(reach.daysCached) || 0;
+  if (reach.windowDays) return `Impressions / CTR: ${reach.windowDays} days (${reach.startDate} through ${reach.endDate}).${reach.windowDays < 90 ? " Available history is shown while the 90-day window builds." : ""}${reach.error ? ` Latest refresh error: ${reach.error}` : ""}`;
   if (reach.error) return `Reach failed (${reach.errorCode || reach.status}${reach.errorStatus ? `, HTTP ${reach.errorStatus}` : ""}): ${reach.error}`;
   if (reach.status === "ready") return `Impressions / CTR refreshed for ${reach.startDate} through ${reach.endDate}.`;
   if (reach.status === "job_created") return "Reach reporting job created. Google must generate the first reports; try again after 24 hours.";
@@ -9,6 +10,10 @@ const apiUrl="/api/paplovag-media-kit";const youtubeRefreshUrl="/api/paplovag-yo
 }
 function renderSyncInfo(data) {
   const sync = data?.youtubeSync || {};
+  const reach = data?.youtubeReachSync || {};
+  const period = reach.windowDays ? `${reach.windowDays} days · ${reach.startDate} – ${reach.endDate}` : "reporting period";
+  qs("impressions-label").textContent = `Impressions · ${period}`;
+  qs("ctr-label").textContent = `CTR · % · ${period}`;
   qs("youtube-sync-time").textContent = formatSyncTime(sync.lastSuccessAt);
   qs("youtube-sync-note").textContent = [sync.analyticsEndDate ? `Analytics through ${sync.analyticsEndDate}.` : "", reachMessage(data?.youtubeReachSync)].filter(Boolean).join(" ");
 }

@@ -36,8 +36,11 @@ malformed reports and another channel's rows fail explicitly. Parser version 2
 causes old cached reports to be reimported instead of trusting previously parsed
 values. Each refresh imports at most 30 reports, follows pagination, and retains
 successfully imported days if a subsequent download fails. No missing day is
-fabricated. A complete 90-day window is required before replacing Impressions/CTR.
-Google report generation or history availability can delay that window.
+fabricated. Until a complete 90-day window exists, the latest contiguous available
+period (up to 90 days) supplies Impressions/CTR. Admin and public cards show
+`windowDays`, `startDate` and `endDate`; the legacy `impressions90d` storage field
+now follows that explicit period. Page loads also derive values from existing
+history, so a further Google refresh is not required to display cached data.
 
 ## Verification
 

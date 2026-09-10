@@ -531,11 +531,40 @@ function classifyReachError(error) {
   return "error";
 }
 
+export function applyAvailableReach(data, history, endDate) {
+  if (!history?.days) return data;
+  let window = findReachWindow(history, endDate);
+  if (window) window.windowDays = 90;
+  else {
+    const dates = Object.keys(history.days).filter(date => date <= endDate && date >= shiftDate(endDate, -179) && history.days[date]?.parserVersion === 2).sort().reverse();
+    if (!dates.length) return data;
+    const latest = dates[0];
+    let impressions = 0, weighted = 0, count = 0;
+    for (let i = 0; i < 90; i += 1) {
+      const day = history.days[shiftDate(latest, -i)];
+      if (!day || day.parserVersion !== 2) break;
+      impressions += Number(day.impressions) || 0;
+      weighted += Number(day.ctrWeighted) || 0;
+      count += 1;
+    }
+    window = { startDate: shiftDate(latest, -(count - 1)), endDate: latest, windowDays: count, impressions: Math.round(impressions), ctr: impressions ? round(weighted / impressions, 2) : 0 };
+  }
+  // Legacy field name retained for existing clients; windowDays defines its period.
+  data.stats = { ...data.stats, impressions90d: window.impressions, ctr: window.ctr };
+  data.youtubeReachSync = { ...data.youtubeReachSync, startDate: window.startDate, endDate: window.endDate, windowDays: window.windowDays };
+  return data;
+}
+
 async function syncReach({ accessToken, kv, analyticsEndDate, stats }) {
   const attemptedAt = new Date().toISOString();
   const history = await loadReachHistory(kv);
   pruneHistory(history, analyticsEndDate);
   const cachedDays = () => Object.values(history.days).filter(day => day.parserVersion === 2).length;
+  const finish = result => {
+    const available = applyAvailableReach({ stats, youtubeReachSync: result }, history, analyticsEndDate);
+    Object.assign(stats, available.stats);
+    return available.youtubeReachSync;
+  };
   let jobInfo = {};
   try {
     const { job, created, reportTypeId } = await ensureReachJob(accessToken);
@@ -546,12 +575,12 @@ async function syncReach({ accessToken, kv, analyticsEndDate, stats }) {
 
     if (created) {
       await kv.put(REACH_HISTORY_KEY, JSON.stringify(history));
-      return { status: "job_created", jobId: job.id, reportTypeId, lastAttemptAt: attemptedAt, reportsProcessedThisRun: 0, daysCached: cachedDays() };
+      return finish({ status: "job_created", jobId: job.id, reportTypeId, lastAttemptAt: attemptedAt, reportsProcessedThisRun: 0, daysCached: cachedDays() });
     }
 
     const reports = await listReports(accessToken, job.id, analyticsEndDate);
     if (!reports.length) {
-      return { status: "waiting_for_reports", jobId: job.id, reportTypeId, lastAttemptAt: attemptedAt, reportsProcessedThisRun: 0, daysCached: cachedDays() };
+      return finish({ status: "waiting_for_reports", jobId: job.id, reportTypeId, lastAttemptAt: attemptedAt, reportsProcessedThisRun: 0, daysCached: cachedDays() });
     }
 
     const processed = await processReports(accessToken, reports, history, kv);
@@ -565,12 +594,12 @@ async function syncReach({ accessToken, kv, analyticsEndDate, stats }) {
     if (window) {
       stats.impressions90d = window.impressions;
       stats.ctr = window.ctr;
-      return { status: "ready", jobId: job.id, reportTypeId, lastAttemptAt: attemptedAt, lastSuccessAt: new Date().toISOString(), startDate: window.startDate, endDate: window.endDate, reportsProcessedThisRun: processed, daysCached };
+      return finish({ status: "ready", jobId: job.id, reportTypeId, lastAttemptAt: attemptedAt, lastSuccessAt: new Date().toISOString(), startDate: window.startDate, endDate: window.endDate, reportsProcessedThisRun: processed, daysCached });
     }
 
-    return { status: processed > 0 ? "backfilling" : "waiting_for_reports", jobId: job.id, reportTypeId, lastAttemptAt: attemptedAt, reportsProcessedThisRun: processed, daysCached };
+    return finish({ status: processed > 0 ? "backfilling" : "waiting_for_reports", jobId: job.id, reportTypeId, lastAttemptAt: attemptedAt, reportsProcessedThisRun: processed, daysCached });
   } catch (error) {
-    return {
+    return finish({
       status: classifyReachError(error),
       lastAttemptAt: attemptedAt,
       ...jobInfo,
@@ -579,7 +608,7 @@ async function syncReach({ accessToken, kv, analyticsEndDate, stats }) {
       errorCode: String(error.code || error.reason || "reach_reporting_error"),
       errorStatus: Number(error.status) || null,
       error: String(error.message || error.reason || "reach_reporting_error").slice(0, 240)
-    };
+    });
   }
 }
 
