@@ -1,1 +1,1 @@
-export { onRequestGet } from "./paplovag-showcase-v3.js";
+export { onRequestGet, onRequestPost } from "./paplovag-showcase-v3.js";

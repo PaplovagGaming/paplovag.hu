@@ -6,11 +6,12 @@ deployment updates the API/admin, but does **not** publish
 
 Publish this file to the **existing** Media Kit cron Worker, retaining its
 `MEDIA_KIT_CRON_SECRET`. Set its Cron Trigger to `1 * * * *` (UTC). The handler
-selects 00:01 Europe/Budapest, including summer/winter time. `/health` must list
+refreshes Paplovag video lists every hour and Analytics at 00:01 Europe/Budapest,
+including summer/winter time. `/health` must list
 both `tuzproba` and `paplovag`; it reports the expected schedule, not the actual
 Cloudflare trigger configuration. Verify the trigger in Cloudflare.
 
-Both POST endpoints accept the same cron bearer secret. The Worker attempts both
+Both Analytics POST endpoints accept the same cron bearer secret. The Worker attempts both
 even if one fails; logs include channel, HTTP status, reach status, cached-day
 count and the actual error. A failed HTTP/core/reach refresh rejects the scheduled
 run so Cloudflare records a failure. Waiting for Google reports is not a failure.
@@ -58,3 +59,27 @@ channel results. Check Paplovag KV history and its last successful refresh time.
 An initial job or unavailable reports legitimately requires waiting for Google;
 an API-disabled, permission, quota or token error requires the corresponding
 Google-side fix shown in the admin.
+
+## Persistent video lists
+
+Authenticated visitor GET `/api/paplovag-showcase` only reads saved snapshots.
+It never fetches Google, including `?refresh=1`. The `shorts`, `top`, `tech` and
+`gaming` snapshots live under `paplovag-youtube-showcase-v9:<section>` with no KV
+expiration. Every successful section gets its own `sectionUpdatedAt`; a refresh
+failure retains that section's data and timestamp, with an explicit error.
+
+The previous v8 Shorts/videos caches migrate on first read while still available.
+If an old cache has already expired, run **Refresh video lists now** in the admin
+once, or invoke the four cron POST requests before serving the new page. A missing
+snapshot shows a preparation message; it does not start a slow visitor-side build.
+
+The Worker calls POST `/api/paplovag-showcase?section=<section>` once for each of
+`shorts`, `top`, `tech`, `gaming` every hour. Only a valid Paplovag admin session or
+`Authorization: Bearer <MEDIA_KIT_CRON_SECRET>` can refresh. Requests are separated
+to bound each playlist's work and prevent one failure from stopping other lists.
+The admin button attempts all four and reports section-specific failures.
+
+Deploy the Pages changes and update the existing standalone Worker separately.
+Verify `/health` includes `hourlyVideoTargets`, then check an hourly event and the
+four stored timestamps. Existing Analytics cron timing and Tuzproba data keys are
+unchanged. Tests: `node --test tests/paplovag-*.test.mjs`.

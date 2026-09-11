@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
 const source=await readFile(new URL('../functions/api/paplovag-showcase-v3.js',import.meta.url),'utf8');
-function setup(fetch){const c=vm.createContext({fetch,URL,URLSearchParams,Response,AbortSignal,console,Intl});vm.runInContext(source.replace('export async function','async function'),c);return c;}
+function setup(fetch){const c=vm.createContext({fetch,URL,URLSearchParams,Response,AbortSignal,console,Intl});vm.runInContext(source.replaceAll('export async function','async function'),c);return c;}
 const channel='UCUEDPQyLPN5lrTH06k2oWYA';
 const videos=Array.from({length:8},(_,i)=>({id:`v${i}`,snippet:{channelId:channel,publishedAt:`2023-01-${String(i+1).padStart(2,'0')}T12:00:00Z`,liveBroadcastContent:'none',title:`Video ${i}`},status:{privacyStatus:'public'},contentDetails:{duration:'PT30S'}}));
 test('playlist pagination includes old Shorts and sorts by publication date',async()=>{

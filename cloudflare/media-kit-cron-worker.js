@@ -2,6 +2,7 @@ const TARGETS = [
   { name: "tuzproba", url: "https://paplovag.hu/api/youtube-analytics-refresh" },
   { name: "paplovag", url: "https://paplovag.hu/api/paplovag-youtube-analytics-refresh" }
 ];
+const VIDEO_TARGETS = ["shorts", "top", "tech", "gaming"].map(section => ({ name: "paplovag-" + section, url: "https://paplovag.hu/api/paplovag-showcase?section=" + section }));
 const TIME_ZONE = "Europe/Budapest";
 
 function budapestTime(date) {
@@ -40,10 +41,10 @@ async function refreshOne(env, target) {
   };
 }
 
-async function runRefreshes(env) {
+async function runRefreshes(env, targets = TARGETS) {
   if (!env.MEDIA_KIT_CRON_SECRET) throw new Error("MEDIA_KIT_CRON_SECRET is not configured");
   const results = [];
-  for (const target of TARGETS) {
+  for (const target of targets) {
     try {
       results.push(await refreshOne(env, target));
     } catch (error) {
@@ -60,8 +61,9 @@ export default {
   async scheduled(controller, env, ctx) {
     const at = new Date(controller.scheduledTime || Date.now());
     const local = budapestTime(at);
-    if (local.hour !== 0 || local.minute !== 1) return;
-    ctx.waitUntil(runRefreshes(env).then(results => {
+    if (local.minute !== 1) return;
+    const targets = local.hour === 0 ? [...TARGETS, ...VIDEO_TARGETS] : VIDEO_TARGETS;
+    ctx.waitUntil(runRefreshes(env, targets).then(results => {
       if (results.some(result => !result.ok)) throw new Error("Media Kit refresh failed: " + JSON.stringify(results));
     }));
   },
@@ -73,7 +75,8 @@ export default {
         ok: true,
         schedule: "1 * * * *",
         timeZone: TIME_ZONE,
-        targets: TARGETS.map((target) => target.name)
+        targets: TARGETS.map((target) => target.name),
+        hourlyVideoTargets: VIDEO_TARGETS.map(target => target.name)
       }), {
         headers: { "Content-Type": "application/json; charset=utf-8" }
       });

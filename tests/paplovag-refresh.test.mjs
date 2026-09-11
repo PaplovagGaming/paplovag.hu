@@ -158,10 +158,10 @@ test('cron attempts both channels after network failure, rejects failed runs, ha
     let pending;
     await context.worker.scheduled({scheduledTime:Date.parse(at)},{MEDIA_KIT_CRON_SECRET:'test'},{waitUntil(p){pending=p;}});
     await assert.rejects(pending,/Media Kit refresh failed/);
-    assert.equal(calls.length,2);
+    assert.equal(calls.length,6);
     assert.match(calls[1],/paplovag-youtube-analytics-refresh/);
     pending=null;
-    await context.worker.scheduled({scheduledTime:Date.parse('2026-09-09T21:01:00Z')},{},{waitUntil(p){pending=p;}});
+    await context.worker.scheduled({scheduledTime:Date.parse('2026-09-09T21:02:00Z')},{},{waitUntil(p){pending=p;}});
     assert.equal(pending,null);
   }
 });

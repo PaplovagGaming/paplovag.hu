@@ -1,13 +1,13 @@
 const ACCESS_COOKIE = "pg_media_access";
 const TOKEN_KEY = "paplovag-youtube-oauth-refresh-token";
-const CACHE_KEY = "paplovag-youtube-showcase-v8";
+const CACHE_KEY = "paplovag-youtube-showcase-v9";
+const SECTION_NAMES = ["shorts", "top", "tech", "gaming"];
 const TARGET_CHANNEL_ID = "UCUEDPQyLPN5lrTH06k2oWYA";
 const SHORTS_PLAYLIST_ID = "PLrH3C01Hh-gmsL1RGeAu-0r4viY6vnA91";
 const TECH_PLAYLIST_ID = "PLrH3C01Hh-gnG5Qs_Xwe3z2yxMFYSwFWh";
 const GAMING_PLAYLIST_ID = "PLrH3C01Hh-gk7hkFKyO7wwne6FYEhdAup";
 const TIME_ZONE = "Europe/Budapest";
-const CACHE_TTL_SECONDS = 2 * 60 * 60;
-const PARTIAL_CACHE_TTL_SECONDS = 15 * 60;
+const FRESH_MS = 60 * 60 * 1000;
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -256,15 +256,15 @@ async function build(env, kv, previous = null, section = "all", cacheKey = CACHE
   const sectionErrors = {};
 
   const [shortResult, top, tech, gaming] = await Promise.all([
-    section === "videos" ? { items: [] } : safeSection("shorts", () => latestShorts(token), { items: previous?.shorts || [], method: "cached_fallback", checkedCandidates: 0, analyticsErrors: 0 }, sectionStatus, sectionErrors),
-    section === "shorts" ? null : safeSection("top", () => lifetimeTop(token, startDate, endDate), previous?.top || [], sectionStatus, sectionErrors),
-    section === "shorts" ? null : safeSection("tech", () => playlistSection(token, TECH_PLAYLIST_ID), previous?.tech || { playlistId: TECH_PLAYLIST_ID, totalVideos: 0, top: [], latest: [] }, sectionStatus, sectionErrors),
-    section === "shorts" ? null : safeSection("gaming", () => playlistSection(token, GAMING_PLAYLIST_ID), previous?.gaming || { playlistId: GAMING_PLAYLIST_ID, totalVideos: 0, top: [], latest: [] }, sectionStatus, sectionErrors)
+    section !== "shorts" && section !== "all" ? { items: [] } : safeSection("shorts", () => latestShorts(token), { items: previous?.shorts || [], method: "cached_fallback", checkedCandidates: 0, analyticsErrors: 0 }, sectionStatus, sectionErrors),
+    section !== "top" && section !== "all" ? null : safeSection("top", () => lifetimeTop(token, startDate, endDate), previous?.top || [], sectionStatus, sectionErrors),
+    section !== "tech" && section !== "all" ? null : safeSection("tech", () => playlistSection(token, TECH_PLAYLIST_ID), previous?.tech || { playlistId: TECH_PLAYLIST_ID, totalVideos: 0, top: [], latest: [] }, sectionStatus, sectionErrors),
+    section !== "gaming" && section !== "all" ? null : safeSection("gaming", () => playlistSection(token, GAMING_PLAYLIST_ID), previous?.gaming || { playlistId: GAMING_PLAYLIST_ID, totalVideos: 0, top: [], latest: [] }, sectionStatus, sectionErrors)
   ]);
 
   if (shortResult.warning) { sectionStatus.shorts = "error"; sectionErrors.shorts = shortResult.warning; }
   const result = {
-    version: 8,
+    version: 9,
     shorts: shortResult.items,
     top,
     tech,
@@ -281,9 +281,34 @@ async function build(env, kv, previous = null, section = "all", cacheKey = CACHE
     topRule: `youtube_analytics_full_channel_${startDate}_through_${endDate}_sorted_by_views`
   };
 
-  const hasErrors = Object.values(sectionStatus).some(value => value === "error");
-  await kv.put(cacheKey, JSON.stringify(result), { expirationTtl: hasErrors ? PARTIAL_CACHE_TTL_SECONDS : CACHE_TTL_SECONDS });
+  result.sectionUpdatedAt = { ...(previous?.sectionUpdatedAt || {}) };
+  for (const name of Object.keys(sectionStatus)) {
+    if (sectionStatus[name] === "ok") result.sectionUpdatedAt[name] = result.updatedAt;
+  }
+  // No expiration: a failed refresh must never remove the last good videos.
+  await kv.put(cacheKey, JSON.stringify(result));
   return result;
+}
+
+async function readSection(kv, name, migrate = true) {
+  const key = CACHE_KEY + ":" + name;
+  const current = await kv.get(key, "json");
+  if (current) return current;
+  // Migrate the previously published cache without waiting for YouTube.
+  const legacy = await kv.get("paplovag-youtube-showcase-v8:" + (name === "shorts" ? "shorts" : "videos"), "json");
+  if (legacy && legacy[name] != null) {
+    legacy.sectionUpdatedAt = { ...legacy.sectionUpdatedAt, [name]: legacy.updatedAt };
+    if (migrate) await kv.put(key, JSON.stringify(legacy));
+    return legacy;
+  }
+  return null;
+}
+
+function selectedSections(request) {
+  const section = new URL(request.url).searchParams.get("section");
+  if (SECTION_NAMES.includes(section)) return [section];
+  if (section === "videos") return ["top", "tech", "gaming"];
+  return SECTION_NAMES;
 }
 
 export async function onRequestGet({ request, env }) {
@@ -292,22 +317,47 @@ export async function onRequestGet({ request, env }) {
   if (!(await verifySession(parseCookies(request)[ACCESS_COOKIE], secret))) return json({ error: "media_kit_access_required" }, 401);
   const kv = storage(env);
   if (!kv) return json({ error: "storage_not_configured" }, 503);
-
-  const requested = new URL(request.url).searchParams.get("section");
-  const section = ["shorts", "videos"].includes(requested) ? requested : "all";
-  const cacheKey = `${CACHE_KEY}:${section}`;
-  let cached = null;
-  try { cached = await kv.get(cacheKey, "json"); } catch {}
-  const force = new URL(request.url).searchParams.get("refresh") === "1";
-  if (!force && cached?.version === 8) return json(cached);
-
   try {
-    return json(await build(env, kv, cached, section, cacheKey));
-  } catch (error) {
-    console.error("Paplovag showcase core refresh failed", error);
-    if (cached?.version === 8) return json({ ...cached, stale: true, coreError: cleanError(error) });
-    const code = String(error.message || "showcase_failed");
-    const status = code === "wrong_youtube_channel" ? 409 : code.includes("missing") || code.includes("not_configured") ? 503 : 502;
-    return json({ error: code }, status);
-  }
+    const names = selectedSections(request);
+    const snapshots = await Promise.all(names.map(name => readSection(kv, name)));
+    const result = { version: 9, sectionStatus: {}, sectionErrors: {}, sectionUpdatedAt: {}, stale: false };
+    names.forEach((name, index) => {
+      const snapshot = snapshots[index];
+      result[name] = snapshot?.[name] || (name === "shorts" || name === "top" ? [] : { top: [], latest: [] });
+      result.sectionStatus[name] = snapshot?.sectionStatus?.[name] || "pending";
+      if (snapshot?.sectionErrors?.[name]) result.sectionErrors[name] = snapshot.sectionErrors[name];
+      const updated = snapshot?.sectionUpdatedAt?.[name] || snapshot?.updatedAt;
+      result.sectionUpdatedAt[name] = updated || null;
+      if (!updated || Date.now() - Date.parse(updated) >= FRESH_MS) result.stale = true;
+    });
+    return json(result);
+  } catch (error) { return json({ error: "showcase_storage_read_failed", message: cleanError(error) }, 503); }
+}
+
+function secureEqual(a, b) {
+  if (!a || !b || a.length !== b.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < a.length; i++) mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return mismatch === 0;
+}
+
+export async function onRequestPost({ request, env }) {
+  const origin = request.headers.get("Origin");
+  if (origin && origin !== new URL(request.url).origin) return json({ error: "invalid_origin" }, 403);
+  const bearer = (request.headers.get("Authorization") || "").replace(/^Bearer /, "");
+  const cron = secureEqual(bearer, env.MEDIA_KIT_CRON_SECRET || "");
+  const admin = await verifySession(parseCookies(request).pg_media_admin_session, adminSecret(env));
+  if (!cron && !admin) return json({ error: "not_authenticated" }, 401);
+  const names = selectedSections(request);
+  // Separate requests bound each playlist's work and isolate Google failures.
+  if (names.length !== 1) return json({ error: "single_section_required" }, 400);
+  const kv = storage(env);
+  if (!kv) return json({ error: "storage_not_configured" }, 503);
+  const name = names[0];
+  try {
+    const previous = await readSection(kv, name, false);
+    const result = await build(env, kv, previous, name, CACHE_KEY + ":" + name);
+    const ok = result.sectionStatus[name] === "ok";
+    return json({ ok, section: name, updatedAt: result.sectionUpdatedAt?.[name], error: result.sectionErrors[name] || null }, ok ? 200 : 502);
+  } catch (error) { return json({ ok: false, section: name, error: cleanError(error) }, 502); }
 }

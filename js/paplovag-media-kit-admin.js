@@ -68,3 +68,24 @@ qs("youtube-refresh")?.addEventListener("click", async () => {
   }
 });
 qs("logout")?.addEventListener("click",async()=>{try{await api({action:"admin_logout"})}catch{}location.reload()});qs("open-public")?.addEventListener("click",()=>window.open("/media-kit/","_blank","noopener"));checkSession();
+qs("video-refresh")?.addEventListener("click", async () => {
+  const button = qs("video-refresh"), status = qs("video-refresh-status");
+  if (button.disabled) return;
+  button.disabled = true;
+  const failures = [];
+  try {
+    for (const section of ["shorts", "top", "tech", "gaming"]) {
+      status.textContent = "Refreshing video lists: " + section + "…";
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 120000);
+      try {
+        const response = await fetch("/api/paplovag-showcase?section=" + section, { method: "POST", credentials: "same-origin", signal: controller.signal, headers: { Accept: "application/json" } });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) throw new Error(payload.error || "HTTP " + response.status);
+      } catch (error) { failures.push(section + ": " + error.message); }
+      finally { clearTimeout(timeout); }
+    }
+    status.textContent = failures.length ? "Some lists could not refresh; previous videos are kept. " + failures.join("; ") : "All video lists refreshed and saved. Visitors receive these saved lists without waiting for YouTube.";
+    status.className = "pg-status " + (failures.length ? "error" : "ok");
+  } finally { button.disabled = false; }
+});
