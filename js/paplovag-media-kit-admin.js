@@ -76,14 +76,19 @@ qs("video-refresh")?.addEventListener("click", async () => {
   try {
     for (const section of ["shorts", "top", "tech", "gaming"]) {
       status.textContent = "Refreshing video lists: " + section + "…";
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 120000);
       try {
-        const response = await fetch("/api/paplovag-showcase?section=" + section, { method: "POST", credentials: "same-origin", signal: controller.signal, headers: { Accept: "application/json" } });
-        const payload = await response.json();
-        if (!response.ok || !payload.ok) throw new Error(payload.error || "HTTP " + response.status);
+        let continuation;
+        for (let batch = 0; batch < 40; batch++) {
+          const response = await fetch("/api/paplovag-showcase?section=" + section, { method: "POST", credentials: "same-origin", signal: AbortSignal.timeout(120000), headers: { Accept: "application/json", "Content-Type": "application/json" }, body: JSON.stringify({ continuation }) });
+          const payload = await response.json();
+          if (!response.ok || !payload.ok) throw new Error(payload.error || "HTTP " + response.status);
+          if (!payload.pending) break;
+          if (!payload.continuation) throw new Error("Missing playlist continuation");
+          if (batch === 39) throw new Error("Playlist is too large for one refresh; previous complete list retained");
+          continuation = payload.continuation;
+          status.textContent = "Refreshing " + section + ": " + payload.processed + " playlist videos checked…";
+        }
       } catch (error) { failures.push(section + ": " + error.message); }
-      finally { clearTimeout(timeout); }
     }
     status.textContent = failures.length ? "Some lists could not refresh; previous videos are kept. " + failures.join("; ") : "All video lists refreshed and saved. Visitors receive these saved lists without waiting for YouTube.";
     status.className = "pg-status " + (failures.length ? "error" : "ok");

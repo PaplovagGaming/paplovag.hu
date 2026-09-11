@@ -83,3 +83,9 @@ Deploy the Pages changes and update the existing standalone Worker separately.
 Verify `/health` includes `hourlyVideoTargets`, then check an hourly event and the
 four stored timestamps. Existing Analytics cron timing and Tuzproba data keys are
 unchanged. Tests: `node --test tests/paplovag-*.test.mjs`.
+
+## Complete Gameplay ranking (2026-09-12)
+
+Gaming uses every page of the Gameplay playlist, excluding video IDs in NekTECH. Public own-channel videos, including recorded streams, are ranked by lifetime Data API viewCount. Dates do not limit eligibility. The authenticated POST returns HTTP 202 with pending=true and a signed, section-bound continuation when more work is needed. The admin and cron send it in the next POST body until pending=false. Each batch uses at most 18 playlist/detail Google calls plus OAuth/channel verification. Continuations expire after 30 minutes; a failed or abandoned scan leaves the prior complete KV snapshot intact. Only the final batch writes paplovag-youtube-showcase-v9:gaming (or :tech). There is no 1000-video truncation; client safety limits fail explicitly without publishing partial rankings.
+
+Deploy the updated standalone cron Worker as well as Pages: older Workers do not follow the new continuation. Run the admin video refresh to replace an earlier incomplete snapshot immediately. Tests: node --test tests/paplovag-playlist.test.mjs tests/paplovag-cache.test.mjs tests/paplovag-shorts.test.mjs tests/paplovag-refresh.test.mjs.

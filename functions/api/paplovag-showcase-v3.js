@@ -201,29 +201,75 @@ async function lifetimeTop(token, startDate, endDate) {
   return out;
 }
 
-async function playlistSection(token, playlistId) {
-  const ids = [];
-  let pageToken = "";
-  for (let page = 0; page < 20; page += 1) {
-    const q = new URLSearchParams({ part: "contentDetails", playlistId, maxResults: "50" });
-    if (pageToken) q.set("pageToken", pageToken);
-    const payload = await googleJson(`https://www.googleapis.com/youtube/v3/playlistItems?${q}`, token);
-    for (const item of payload.items || []) {
-      const id = item?.contentDetails?.videoId;
-      if (id) ids.push(id);
+// Each authenticated request uses at most 18 Google calls for playlist work.
+// The signed continuation carries partial results; KV only receives complete lists.
+async function playlistBatch(token, section, state = null) {
+  const playlistId = section === "gaming" ? GAMING_PLAYLIST_ID : TECH_PLAYLIST_ID;
+  const work = state || { section, phase: section === "gaming" ? "excludeTech" : "videos", pageToken: "", excluded: [], seen: [], top: [], latest: [], totalVideos: 0, processed: 0 };
+  const excluded = new Set(work.excluded), seen = new Set(work.seen);
+  let calls = 0;
+  while (calls < 17 && work.phase !== "done") {
+    const source = work.phase === "excludeTech" ? TECH_PLAYLIST_ID : playlistId;
+    const q = new URLSearchParams({ part: "contentDetails", playlistId: source, maxResults: "50" });
+    if (work.pageToken) q.set("pageToken", work.pageToken);
+    const page = await googleJson("https://www.googleapis.com/youtube/v3/playlistItems?" + q, token);
+    calls++;
+    const ids = [...new Set((page.items || []).map(item => item.contentDetails?.videoId).filter(Boolean))];
+    if (work.phase === "excludeTech") {
+      ids.forEach(id => excluded.add(id));
+    } else {
+      const fresh = ids.filter(id => !seen.has(id));
+      fresh.forEach(id => seen.add(id));
+      work.processed = seen.size;
+      const candidates = fresh.filter(id => !excluded.has(id));
+      const details = candidates.length ? await videoDetails(token, candidates) : [];
+      if (candidates.length) calls++;
+      const videos = details.filter(item => item.status?.privacyStatus === "public" && item.snippet?.channelId === TARGET_CHANNEL_ID).map(publicVideo);
+      work.totalVideos += videos.length;
+      work.top = [...work.top, ...videos].sort((a, b) => b.viewCount - a.viewCount || a.id.localeCompare(b.id)).slice(0, 3);
+      work.latest = [...work.latest, ...videos].filter(v => Number.isFinite(Date.parse(v.publishedAt))).sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt) || a.id.localeCompare(b.id)).slice(0, 3);
     }
-    pageToken = payload.nextPageToken || "";
-    if (!pageToken) break;
+    const next = page.nextPageToken || "";
+    if (next && next === work.pageToken) throw new Error("Google returned a repeated playlist page token");
+    work.pageToken = next;
+    if (!next) work.phase = work.phase === "excludeTech" ? "videos" : "done";
   }
-  const videos = (await videoDetails(token, ids))
-    .filter(item => item?.status?.privacyStatus === "public" && item?.snippet?.channelId === TARGET_CHANNEL_ID)
-    .map(publicVideo);
-  return {
-    playlistId,
-    totalVideos: videos.length,
-    top: [...videos].sort((a, b) => b.viewCount - a.viewCount).slice(0, 3),
-    latest: [...videos].sort((a, b) => Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0)).slice(0, 3)
-  };
+  work.excluded = [...excluded]; work.seen = [...seen];
+  return { work, complete: work.phase === "done", value: { playlistId, totalVideos: work.totalVideos, scannedVideos: work.processed, excludedTechVideos: section === "gaming" ? work.seen.filter(id => excluded.has(id)).length : 0, rankingRule: "complete_playlist_lifetime_views", top: work.top, latest: work.latest } };
+}
+
+async function playlistSection(token, playlistId) {
+  const result = await playlistBatch(token, playlistId === GAMING_PLAYLIST_ID ? "gaming" : "tech");
+  if (!result.complete) throw new Error("Playlist requires a continued refresh; incomplete rankings are not published");
+  return result.value;
+}
+
+async function refreshPlaylist(request, env, kv, section) {
+  const secret = adminSecret(env);
+  let state = null;
+  const body = await request.text();
+  const continuation = body ? JSON.parse(body).continuation : null;
+  if (continuation) {
+    const [encoded, signature] = String(continuation).split(".");
+    if (!encoded || !signature || !secureEqual(await hmac("playlist-refresh:" + encoded, secret), signature)) throw new Error("invalid_playlist_continuation");
+    state = JSON.parse(decodeText(encoded));
+    if (state.section !== section || state.exp < Date.now()) throw new Error("expired_or_wrong_playlist_continuation");
+  }
+  if (!secret || !env.YOUTUBE_OAUTH_CLIENT_ID || !env.YOUTUBE_OAUTH_CLIENT_SECRET) throw new Error("oauth_secrets_missing");
+  const record = await kv.get(TOKEN_KEY, "json");
+  if (!record) throw new Error("oauth_not_connected");
+  const token = await getAccessToken(env, await decryptRefreshToken(record, secret));
+  const channel = await googleJson("https://www.googleapis.com/youtube/v3/channels?part=id&mine=true&maxResults=50", token);
+  if (!(channel.items || []).some(item => item.id === TARGET_CHANNEL_ID)) throw new Error("wrong_youtube_channel");
+  const result = await playlistBatch(token, section, state);
+  if (!result.complete) {
+    result.work.exp = state?.exp || Date.now() + 30 * 60 * 1000;
+    const encoded = base64url(new TextEncoder().encode(JSON.stringify(result.work)));
+    return json({ ok: true, pending: true, section, processed: result.work.processed, continuation: encoded + "." + await hmac("playlist-refresh:" + encoded, secret) }, 202);
+  }
+  const updatedAt = new Date().toISOString();
+  await kv.put(CACHE_KEY + ":" + section, JSON.stringify({ version: 9, [section]: result.value, sectionStatus: { [section]: "ok" }, sectionErrors: {}, sectionUpdatedAt: { [section]: updatedAt }, updatedAt }));
+  return json({ ok: true, pending: false, section, processed: result.work.processed, totalVideos: result.value.totalVideos, updatedAt });
 }
 
 async function safeSection(name, task, fallback, status, errors) {
@@ -355,6 +401,7 @@ export async function onRequestPost({ request, env }) {
   if (!kv) return json({ error: "storage_not_configured" }, 503);
   const name = names[0];
   try {
+    if (name === "gaming" || name === "tech") return await refreshPlaylist(request, env, kv, name);
     const previous = await readSection(kv, name, false);
     const result = await build(env, kv, previous, name, CACHE_KEY + ":" + name);
     const ok = result.sectionStatus[name] === "ok";

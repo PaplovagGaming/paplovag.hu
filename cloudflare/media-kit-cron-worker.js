@@ -17,7 +17,10 @@ function budapestTime(date) {
 }
 
 async function refreshOne(env, target) {
+  let continuation;
+  for (let batch = 0; batch < 40; batch++) {
   const response = await fetch(target.url, {
+    body: continuation ? JSON.stringify({ continuation }) : undefined,
     method: "POST",
     signal: AbortSignal.timeout(120000),
     headers: {
@@ -28,17 +31,24 @@ async function refreshOne(env, target) {
   const text = await response.text();
   let payload;
   try { payload = JSON.parse(text); } catch {}
+  if (response.ok && payload?.ok && payload?.pending) {
+    if (!payload.continuation) throw new Error("Missing playlist continuation");
+    continuation = payload.continuation;
+    continue;
+  }
   const reach = payload?.data?.youtubeReachSync;
   const reachFailed = ["error", "api_unavailable", "report_type_unavailable", "rate_limited"].includes(reach?.status);
   return {
     name: target.name,
     ok: response.ok && payload?.ok === true && !reachFailed,
     status: response.status,
-    lastSuccessAt: payload?.data?.youtubeSync?.lastSuccessAt || null,
+    lastSuccessAt: payload?.updatedAt || payload?.data?.youtubeSync?.lastSuccessAt || null,
     reachStatus: reach?.status || null,
     daysCached: reach?.daysCached ?? null,
     error: reach?.error || payload?.message || payload?.error || (!payload ? text.slice(0, 300) : null)
   };
+  }
+  throw new Error("Playlist refresh exceeded 40 batches; previous complete snapshot retained");
 }
 
 async function runRefreshes(env, targets = TARGETS) {
