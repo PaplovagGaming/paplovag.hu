@@ -40,34 +40,56 @@
     counters.forEach(function (counter) { visible.add(counter); });
   }
 
-  var controller = new AbortController();
-  var timeout = window.setTimeout(function () { controller.abort(); }, 10000);
-  fetch("/api/youtube?type=statistics&channel=paplovag", {
-    credentials: "omit",
-    headers: { Accept: "application/json" },
-    signal: controller.signal
-  }).then(function (response) {
-    if (!response.ok) throw new Error("Channel statistics unavailable");
-    return response.json();
-  }).then(function (data) {
-    counters.forEach(function (counter) {
-      var value = data[counter.dataset.channelStat];
-      if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
-        counter.title = "Az aktuális adat átmenetileg nem elérhető.";
-        return;
+  function load(platform, endpoint) {
+    var selected = counters.filter(function (counter) {
+      return (counter.dataset.statPlatform || "youtube") === platform;
+    });
+    if (!selected.length) return;
+    var controller = new AbortController();
+    var timeout = window.setTimeout(function () { controller.abort(); }, 15000);
+    fetch(endpoint, {
+      credentials: "omit",
+      headers: { Accept: "application/json" },
+      signal: controller.signal
+    }).then(function (response) {
+      if (!response.ok) {
+        var error = new Error("Channel statistics unavailable");
+        error.status = response.status;
+        throw error;
       }
-      values.set(counter, value);
-      if (counter.dataset.channelStat === "subscribers" && data.subscribersUpdatedAt) {
-        var date = new Date(data.subscribersUpdatedAt);
-        if (Number.isFinite(date.getTime())) {
-          counter.title = "Frissítve: " + date.toLocaleDateString("hu-HU", { timeZone: "Europe/Budapest" });
+      return response.json();
+    }).then(function (data) {
+      selected.forEach(function (counter) {
+        var value = data[counter.dataset.channelStat];
+        if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+          counter.title = "Az aktuális adat átmenetileg nem elérhető.";
+          return;
         }
-      }
-      render(counter);
-    });
-  }).catch(function () {
-    counters.forEach(function (counter) {
-      counter.title = "Az aktuális adat átmenetileg nem elérhető.";
-    });
-  }).finally(function () { window.clearTimeout(timeout); });
+        values.set(counter, value);
+        counter.title = "";
+        var updatedAt = platform === "twitch" ? data.updatedAt :
+          (counter.dataset.channelStat === "subscribers" ? data.subscribersUpdatedAt : null);
+        if (updatedAt) {
+          var date = new Date(updatedAt);
+          if (Number.isFinite(date.getTime())) {
+            counter.title = (data.stale ? "Utolsó sikeres frissítés: " : "Frissítve: ") +
+              date.toLocaleString("hu-HU", { timeZone: "Europe/Budapest" });
+          }
+        }
+        render(counter);
+      });
+    }).catch(function (error) {
+      selected.forEach(function (counter) {
+        if (platform === "twitch") {
+          counter.title = error.status === 503 ?
+            "Korábban megadott érték; a Twitch-adatkapcsolat aktiválásra vár." :
+            "Korábban megadott érték; az aktuális Twitch-adat átmenetileg nem elérhető.";
+        } else {
+          counter.title = "Az aktuális adat átmenetileg nem elérhető.";
+        }
+      });
+    }).finally(function () { window.clearTimeout(timeout); });
+  }
+  load("youtube", "/api/youtube?type=statistics&channel=paplovag");
+  load("twitch", "/api/twitch-statistics");
 }());
