@@ -270,6 +270,35 @@ async function loadShowcase(apiKey, channelId) {
   }, 200, 21600);
 }
 
+
+async function loadStatistics(apiKey, channelId, env) {
+  // Reuse only the public subscriber count from the media kit's saved snapshot.
+  // Audience demographics, analytics and authentication data stay private.
+  let saved = null;
+  if (channelId === CHANNELS.paplovag) {
+    try {
+      saved = await (env.MEDIA_KIT_KV || env.KV)?.get("paplovag-media-kit", "json");
+    } catch {}
+  }
+  const savedCount = saved?.stats?.subscribers;
+  const hasSavedCount = typeof savedCount === "number" && Number.isSafeInteger(savedCount) && savedCount > 0;
+  const params = new URLSearchParams({ part: "statistics", id: channelId, key: apiKey });
+  const result = await getYouTubeJson(`https://www.googleapis.com/youtube/v3/channels?${params}`);
+  if (!result.ok && !hasSavedCount) return result.response;
+  const statistics = result.ok ? result.data.items?.[0]?.statistics : null;
+  const count = value => {
+    if (value === undefined || value === null || value === "") return null;
+    const n = Number(value);
+    return Number.isSafeInteger(n) && n >= 0 ? n : null;
+  };
+  return json({
+    subscribers: hasSavedCount ? savedCount : (statistics?.hiddenSubscriberCount ? null : count(statistics?.subscriberCount)),
+    videoCount: count(statistics?.videoCount),
+    subscriberSource: hasSavedCount ? "media-kit" : "youtube",
+    subscribersUpdatedAt: hasSavedCount ? (saved?.youtubeSync?.lastSuccessAt || saved?.updatedAt || null) : new Date().toISOString()
+  }, 200, 3600);
+}
+
 export async function onRequestGet(context) {
   const { request, env, waitUntil } = context;
   if (!env.GOOGLE_API_KEY) {
@@ -282,7 +311,7 @@ export async function onRequestGet(context) {
   const channelName = requestUrl.searchParams.get("channel") ?? "paplovag";
   const channelId = CHANNELS[channelName];
   if (!channelId) return json({ error: "invalid_channel", allowed: Object.keys(CHANNELS) }, 400);
-  if (!["playlists", "live", "recent", "showcase"].includes(type)) return json({ error: "invalid_type", allowed: ["playlists", "live", "recent", "showcase"] }, 400);
+  if (!["playlists", "live", "recent", "showcase", "statistics"].includes(type)) return json({ error: "invalid_type", allowed: ["playlists", "live", "recent", "showcase", "statistics"] }, 400);
 
   const cacheUrl = new URL(requestUrl.origin + requestUrl.pathname);
   cacheUrl.searchParams.set("type", type);
@@ -297,6 +326,7 @@ export async function onRequestGet(context) {
     let response;
     if (type === "playlists") response = await loadPlaylists(env.GOOGLE_API_KEY, channelId);
     else if (type === "live") response = await loadLiveStatus(env.GOOGLE_API_KEY, channelId);
+    else if (type === "statistics") response = await loadStatistics(env.GOOGLE_API_KEY, channelId, env);
     else if (type === "recent") response = await loadRecentVideos(env.GOOGLE_API_KEY, channelId);
     else if (channelName === "paplovag") response = await loadShowcaseFast(env.GOOGLE_API_KEY, channelId);
     else response = await loadShowcase(env.GOOGLE_API_KEY, channelId);
