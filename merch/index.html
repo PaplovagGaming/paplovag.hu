@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Merch | Paplovag</title>
+<meta name="description" content="A Paplovag merch hamarosan érkezik.">
+<link rel="canonical" href="https://paplovag.hu/merch/">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@100;200;300;400;500;600;700;800;900&family=Nunito:ital,wght@0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/plugins.css?ver=7.0">
+<link rel="stylesheet" href="/css/style.css?ver=7.0">
+<style>
+.header .nav{opacity:1}
+.creative_link[aria-current="page"]{color:var(--mc1)}
+.merch-coming-soon{display:flex;align-items:center;justify-content:center;flex:1;text-align:center;padding:180px 20px 100px}
+.merch-coming-soon .fn__maintitle{margin-bottom:30px}
+.merch-coming-soon .status{font-family:var(--hff);font-size:36px;font-weight:300;line-height:1.22;color:var(--hc);margin:0 0 40px}
+.merch-coming-soon .metaportal_fn_button{margin:0 auto}
+a:focus-visible,.merch-menu-toggle:focus-visible{outline:2px solid var(--mc1);outline-offset:6px}
+.merch-menu-toggle{border:0;padding:0}
+@media(max-width:1040px){.merch-coming-soon{padding:80px 20px}}
+@media(max-width:480px){.merch-coming-soon .status{font-size:28px}}
+</style>
+</head>
+<body>
+<div class="metaportal_fn_main">
+<!-- Mobile Navigation -->
+	<div class="metaportal_fn_mobnav">
+		<div class="mob_top">
+			<div class="social_trigger">
+				<div class="social">
+					<ul>
+						<li><a href="https://www.facebook.com/" target="_blank">Fb.</a></li>
+						<li><a href="https://www.twitter.com/" target="_blank">Tw.</a></li>
+						<li><a href="https://www.instagram.com/" target="_blank">In.</a></li>
+						<li><a href="https://www.linkedin.com/" target="_blank">Ln.</a></li>
+					</ul>
+				</div>
+			</div>
+		</div>
+		<div class="mob_mid">
+			<!-- <div class="logo">
+				<a href="index.html"><img src="img/logo.png" alt=""></a>
+			</div> -->
+			<button class="trigger merch-menu-toggle" type="button" aria-label="Menü" aria-expanded="false" aria-controls="merch-mobile-menu"><span></span></button>
+		</div>
+		<div class="mob_bot" id="merch-mobile-menu">
+			<ul>
+				<li><a class="creative_link" href="/#home">Főoldal</a></li>
+				<li><a class="creative_link" href="/#about">Rólam</a></li>
+				<li><a class="creative_link" href="/#news">Mérföldkövek</a></li>
+				<li><a class="creative_link" href="/merch" aria-current="page">Merch</a></li>
+				<li><a class="creative_link" href="https://kingdom.paplovag.hu/" target="_blank" rel="noopener">Birodalom</a></li>
+			</ul>
+		</div>
+	</div>
+	<!-- !Mobile Navigation -->
+
+	<!-- Header -->
+	<header id="header">
+		<div class="header">
+			<div class="header_in">
+
+				<div class="trigger_logo">
+					<button class="trigger merch-menu-toggle" type="button" aria-label="Menü" aria-expanded="false" aria-controls="merch-mobile-menu"><span></span></button>
+					<div class="logo">
+						<!-- <a href="index.html"><img src="img/logo.png" alt="">PAPLOVAG</a> -->
+					</div>
+				</div>
+
+				<div class="nav">
+					<ul>
+						<li><a class="creative_link" href="/#home">Főoldal</a></li>
+						<li><a class="creative_link" href="/#about">Rólam</a></li>
+						<li><a class="creative_link" href="/#news">Mérföldkövek</a></li>
+				<li><a class="creative_link" href="/merch" aria-current="page">Merch</a></li>
+						<li><a class="creative_link" href="https://kingdom.paplovag.hu/" target="_blank" rel="noopener">Birodalom</a></li>
+					</ul>
+				</div>
+
+				<div class="wallet">
+
+				</div>
+
+			</div>
+		</div>
+	</header>
+	<!-- !Header -->
+
+
+<div class="metaportal_fn_content">
+<main class="merch-coming-soon">
+<div>
+<h1 class="fn__maintitle big" data-text="MERCH" data-align="center">MERCH</h1>
+<p class="status">Coming soon...</p>
+<a href="/" class="metaportal_fn_button"><span>Vissza a főoldalra</span></a>
+</div>
+</main>
+<!-- Footer -->
+<footer id="footer">
+    <div class="container">
+        <div class="footer">
+            <div class="left_part">
+                <p>Copyright 2024 · <a href="https://kingdom.paplovag.hu/privacy/" target="_blank" rel="noopener">Adatvédelmi tájékoztató</a></p>
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- !Footer -->
+
+
+</div>
+</div>
+<script>
+document.querySelectorAll('.merch-menu-toggle').forEach(function(button){
+button.addEventListener('click',function(){
+var menu=document.getElementById('merch-mobile-menu');
+var opened=button.getAttribute('aria-expanded')==='true';
+document.querySelectorAll('.merch-menu-toggle').forEach(function(toggle){toggle.setAttribute('aria-expanded',String(!opened));toggle.classList.toggle('active',!opened)});
+menu.style.display=opened?'none':'block';
+});
+});
+</script>
+</body>
+</html>

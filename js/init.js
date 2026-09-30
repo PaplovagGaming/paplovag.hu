@@ -778,7 +778,8 @@ var MetaPortalFilterCondition	= 'and';
 		headerAnchor: function(){
 			$('.header .nav a').on('click',function(){
 				var e = $(this);
-				if($(e.attr('href')).length){
+				var href = e.attr('href');
+				if(href && href.charAt(0) === '#' && href.length > 1 && $(href).length){
 					$("html, body").animate({ scrollTop: $(e.attr('href')).offset().top }, 1000);
 				}
 			});
