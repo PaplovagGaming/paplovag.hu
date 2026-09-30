@@ -46,7 +46,7 @@
     });
     if (!selected.length) return;
     var controller = new AbortController();
-    var timeout = window.setTimeout(function () { controller.abort(); }, 15000);
+    var timeout = window.setTimeout(function () { controller.abort(); }, platform === "twitch" ? 25000 : 15000);
     fetch(endpoint, {
       credentials: "omit",
       headers: { Accept: "application/json" },
@@ -91,5 +91,5 @@
     }).finally(function () { window.clearTimeout(timeout); });
   }
   load("youtube", "/api/youtube?type=statistics&channel=paplovag");
-  load("twitch", "/api/twitch-statistics");
+  load("twitch", "https://kingdom.paplovag.hu/api/creator/twitch/public");
 }());
