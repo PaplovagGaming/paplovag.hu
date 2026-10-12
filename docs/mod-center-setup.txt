@@ -15,3 +15,9 @@ Teljes bekötési leírás: paplovag-kingdom/docs/MOD_CENTER_SETUP_HU.txt.
 Elkészült: beállítások, platformonkénti résztvevők és szűrés, előzmények, audit, Twitch stream/chat embed,
 OBS read-only overlay, külön 403 oldal. A botkapcsolat nélkül a tényleges nyitás blokkolt.
 Twitch és Streamer.bot valódi integrációs teszt még szükséges; éles telepítés nem történt.
+
+Elkülönített HTTPS tesztoldal: https://mod-test.paplovag-mod-center-test.pages.dev/mod/
+Ez a külön paplovag-mod-center-test projekt csak MOD fájlokat és önálló tesztadatbázist használ.
+auth/status readiness ellenőrzés tiltja a belépési gombot, amíg nincs működő tokenváltás.
+A meglévő titkosított Twitch-kulcs nem olvasható vissza. A szerveroldali tokenváltó alternatíva
+külön jóváhagyásra előkészített backend-változás; nincs productionbe telepítve.

@@ -538,6 +538,13 @@ async function init() {
     $("#demo-banner").hidden = false;
   } else {
     try {
+      if (!(await api("auth/status")).ready) {
+        $(".twitch-login").removeAttribute("href");
+        $(".twitch-login").setAttribute("aria-disabled", "true");
+        text($(".twitch-login"), "Twitch-kapcsolat előkészítése");
+        text($("#auth-error"), "A Twitch-belépéshez szükséges beállítás még hiányzik. Próbáld újra a bekötés után.");
+        return;
+      }
       user = (await api("session")).user;
     } catch (e) {
       forbidden(e.message);
