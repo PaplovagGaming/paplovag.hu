@@ -1,0 +1,23 @@
+PAPLOVAG MOD CENTER – FELÜLET
+
+Új felület: /mod/. Védett adatok és műveletek: /api/mod/*.
+Belépés, session és giveaway backend a paplovag-kingdom MOD modulban, meglévő secret bindingokkal.
+A frontend proxy csak __Host-mod_session és __Host-mod_oauth cookie-kat továbbít.
+A MOD-origin HTTPS legyen; cookie-k Secure/HttpOnly/SameSite=Lax értékkel működnek.
+Twitch callback: https://paplovag.hu/api/mod/auth/callback.
+2026-10-12: a cím mentve és újratöltés után ellenőrizve a Paplovag Kingdom Twitch-appban.
+A régi Kingdom callback megmaradt. A MOD API production telepítése még nem történt meg.
+Átmeneti /mod/?demo=1 előnézet kizárólag mintaadatokat kezel; nem OAuth bypass a backendhez.
+A production API a demo paramétert nem értelmezi; admin adatot mindig friss jogosultság alapján ad.
+Preview környezetben a proxy UPSTREAM konstansa a teszt Kingdom-host legyen, MOD_PUBLIC_ORIGIN pedig a preview origin.
+Teljes bekötési leírás: paplovag-kingdom/docs/MOD_CENTER_SETUP_HU.txt.
+
+Elkészült: beállítások, platformonkénti résztvevők és szűrés, előzmények, audit, Twitch stream/chat embed,
+OBS read-only overlay, külön 403 oldal. A botkapcsolat nélkül a tényleges nyitás blokkolt.
+Twitch és Streamer.bot valódi integrációs teszt még szükséges; éles telepítés nem történt.
+
+Elkülönített HTTPS tesztoldal: https://mod-test.paplovag-mod-center-test.pages.dev/mod/
+Ez a külön paplovag-mod-center-test projekt csak MOD fájlokat és önálló tesztadatbázist használ.
+auth/status readiness ellenőrzés tiltja a belépési gombot, amíg nincs működő tokenváltás.
+A meglévő titkosított Twitch-kulcs nem olvasható vissza. A szerveroldali tokenváltó alternatíva
+külön jóváhagyásra előkészített backend-változás; nincs productionbe telepítve.

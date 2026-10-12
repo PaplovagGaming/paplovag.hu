@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="hu">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <meta name="referrer" content="no-referrer" />
+    <title>Paplovag MOD Center</title>
+    <link rel="stylesheet" href="/mod/mod.css" />
+    <script src="/mod/mod.js" defer></script>
+  </head>
+  <body>
+    <div id="auth-view" class="auth-view">
+      <div class="auth-card">
+        <span class="crest">♜</span>
+        <p class="eyebrow">PAPLOVAG · MOD CENTER</p>
+        <h1>A közösség<br />irányítópultja.</h1>
+        <p id="auth-description">
+          Jelentkezz be Twitch-fiókoddal. A központot a Paplovag csatorna
+          moderátorai használhatják.
+        </p>
+        <a class="button primary twitch-login" href="/api/mod/auth/start"
+          >Belépés Twitch-fiókkal <span>↗</span></a
+        >
+        <p id="auth-error" role="status"></p>
+        <small>Stream, nyereményjáték és sorsolás. Egy helyen.</small>
+      </div>
+    </div>
+    <div id="app" hidden>
+      <aside class="sidebar">
+        <a class="brand" href="/mod/"
+          ><span class="crest">♜</span
+          ><span>PAPLOVAG<small>MOD CENTER</small></span></a
+        >
+        <p class="nav-label">MUNKATERÜLET</p>
+        <nav aria-label="Moderátori menü">
+          <button class="nav-item selected" data-view="active">
+            <span>◈</span> Nyereményjáték</button
+          ><button class="nav-item" data-view="history">
+            <span>↺</span> Előző sorsolások</button
+          ><button class="nav-item" data-view="audit">
+            <span>☷</span> Audit napló</button
+          ><button class="nav-item" data-view="overlay">
+            <span>▣</span> OBS overlay
+          </button>
+        </nav>
+        <div class="sidebar-bottom">
+          <a href="https://paplovag.hu/" target="_blank" rel="noopener"
+            >Paplovag.hu <span>↗</span></a
+          >
+          <p>MOD CENTER <span class="version">V1</span></p>
+          <small>A pontokat a Streamer.bot kezeli.</small>
+        </div>
+      </aside>
+      <div class="workspace">
+        <header class="topbar">
+          <span class="breadcrumb"
+            >Moderátori központ <span>/</span>
+            <strong id="view-title">Nyereményjáték</strong></span
+          >
+          <div class="account">
+            <span id="bot-badge" class="connection"
+              >Bot kapcsolat ellenőrzése</span
+            ><img id="avatar" alt="" hidden /><span id="user-name"></span
+            ><button
+              id="logout"
+              class="icon-button"
+              title="Kijelentkezés"
+              aria-label="Kijelentkezés"
+            >
+              ↪
+            </button>
+          </div>
+        </header>
+        <main>
+          <div id="demo-banner" class="demo-banner" hidden>
+            ELŐNÉZET · Mintaadatokkal működik. A gombok nem módosítanak valódi
+            játékot vagy garasegyenleget.
+          </div>
+          <div id="notice" class="notice" role="status" hidden></div>
+          <section id="view-active" class="view">
+            <div class="heading">
+              <div>
+                <p class="eyebrow">A KÖZÖSSÉGNEK, A KÖZÖSSÉGTŐL</p>
+                <h1>Nyereményjáték</h1>
+                <p>
+                  Indíts játékot, kövesd a nevezéseket, és találd meg a
+                  nyertest.
+                </p>
+              </div>
+              <span id="game-status" class="status">Nincs aktív játék</span>
+            </div>
+            <div class="stats">
+              <div>
+                <span>Résztvevők</span><strong id="stat-people">0</strong
+                ><small>Mindhárom platformról</small>
+              </div>
+              <div>
+                <span>Megvásárolt jegyek</span
+                ><strong id="stat-tickets">0</strong
+                ><small id="stat-spent">0 garas felhasználva</small>
+              </div>
+              <div>
+                <span>Aktív támogatók</span
+                ><strong id="stat-supporters">0</strong
+                ><small>Saját platformon 2× súly</small>
+              </div>
+              <div>
+                <span>Következő emlékeztető</span
+                ><strong id="stat-reminder">—</strong
+                ><small>Nyitott játéknál 20 percenként</small>
+              </div>
+            </div>
+            <div class="giveaway-grid">
+              <section class="card settings-card">
+                <div class="card-heading">
+                  <h2>Játék beállításai</h2>
+                  <span class="muted">01</span>
+                </div>
+                <form id="game-form">
+                  <label
+                    >Nyeremény
+                    <input
+                      name="prize"
+                      id="prize"
+                      maxlength="200"
+                      placeholder="Például: Steam játékkulcs"
+                      required /></label
+                  ><label
+                    >Jelentkezési kulcsszó
+                    <div class="input-prefix">
+                      <span>!</span
+                      ><input
+                        name="keyword"
+                        id="keyword"
+                        maxlength="32"
+                        minlength="2"
+                        placeholder="nyeremeny"
+                        required
+                      /></div
+                  ></label>
+                  <div class="field-pair">
+                    <label
+                      >Jegy ára
+                      <div class="fixed-input">
+                        100 <span>garas</span>
+                      </div></label
+                    ><label
+                      >Maximum / platform<input
+                        name="maxTickets"
+                        id="max-tickets"
+                        type="number"
+                        min="1"
+                        max="10"
+                        value="10"
+                        required
+                    /></label>
+                  </div>
+                  <label
+                    >Belső megjegyzés <span class="muted">opcionális</span
+                    ><textarea
+                      name="note"
+                      id="note"
+                      maxlength="1000"
+                      rows="2"
+                      placeholder="Csak a moderátorok látják"
+                    ></textarea>
+                  </label>
+                  <div class="platform-section">
+                    <p>Résztvevő platformok</p>
+                    <div class="platforms">
+                      <span class="platform twitch">● Twitch</span
+                      ><span class="platform youtube">● YouTube</span
+                      ><span class="platform kick">● Kick</span>
+                    </div>
+                    <small>Mindhárom platform aktív minden játékban.</small>
+                  </div>
+                  <div class="supporter-rule">
+                    <span>✦</span>
+                    <div>
+                      <strong>A támogatóknak 2× sorsolási súly</strong>
+                      <p>
+                        A sorsoláskor aktív, saját platformon fennálló támogatás
+                        alapján.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="submit"
+                    id="create-game"
+                    class="button primary wide"
+                  >
+                    Játék létrehozása <span>＋</span>
+                  </button>
+                </form>
+                <div id="game-controls" class="game-controls" hidden>
+                  <button data-action="archive" class="button secondary wide">
+                    Előkészítés elvetése</button
+                  ><button data-action="open" class="button primary wide">
+                    Nevezés megnyitása</button
+                  ><button data-action="close" class="button secondary wide">
+                    Nevezés lezárása</button
+                  ><button
+                    data-action="refresh-supporters"
+                    class="button secondary wide"
+                  >
+                    Támogatói státusz frissítése</button
+                  ><button data-action="draw" class="button primary wide">
+                    ✦ Sorsolás indítása
+                  </button>
+                  <p id="pending-label" class="muted"></p>
+                </div>
+              </section>
+              <section class="card participants-card">
+                <div class="card-heading">
+                  <div>
+                    <h2>
+                      Résztvevők
+                      <span id="participant-count" class="count">0</span>
+                    </h2>
+                    <p>A Streamer.bot által visszaigazolt nevezések.</p>
+                  </div>
+                  <span class="live-marker">● Élő lista</span>
+                </div>
+                <div class="table-toolbar">
+                  <input
+                    id="search"
+                    type="search"
+                    aria-label="Résztvevő keresése"
+                    placeholder="Keresés név alapján…"
+                  /><select id="platform-filter" aria-label="Platform szűrése">
+                    <option value="">Minden platform</option>
+                    <option value="twitch">Twitch</option>
+                    <option value="youtube">YouTube</option>
+                    <option value="kick">Kick</option>
+                  </select>
+                </div>
+                <div class="table-scroll">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Résztvevő</th>
+                        <th>Platform</th>
+                        <th>Jegyek</th>
+                        <th>Támogatás</th>
+                        <th>Becsült súly</th>
+                      </tr>
+                    </thead>
+                    <tbody id="participants"></tbody>
+                  </table>
+                </div>
+                <div id="participants-empty" class="empty">
+                  <span>◈</span>
+                  <h3>Itt gyűlnek majd a nevezők.</h3>
+                  <p>
+                    Nyisd meg a játékot. A nézők a chatben,<br />a megadott
+                    kulcsszóval vásárolhatnak jegyet.
+                  </p>
+                </div>
+                <footer class="table-footer">
+                  <span>100 garas = 1 jegy</span
+                  ><span>A végleges súly a sorsoláskor rögzül.</span>
+                </footer>
+              </section>
+            </div>
+            <section class="card announcement">
+              <div>
+                <p class="eyebrow">CHATFELHÍVÁS ELŐNÉZETE</p>
+                <p id="announcement-text">
+                  A felhívás a nyeremény és a kulcsszó megadásával készül el.
+                </p>
+              </div>
+              <button
+                data-action="remind"
+                id="manual-reminder"
+                class="button secondary"
+              >
+                Emlékeztető küldése ↗
+              </button>
+            </section>
+            <section class="card stream-card">
+              <div class="card-heading">
+                <div>
+                  <h2>Paplovag stream</h2>
+                  <p>Nézd az adást, és kövesd a chatet a játék mellett.</p>
+                </div>
+                <button id="stream-toggle" class="button secondary">
+                  Stream betöltése
+                </button>
+              </div>
+              <div id="stream-content" class="stream-content" hidden>
+                <iframe
+                  id="stream"
+                  title="Paplovag élő Twitch adás"
+                  allow="autoplay; fullscreen"
+                  allowfullscreen
+                ></iframe
+                ><iframe id="chat" title="Paplovag Twitch chat"></iframe>
+              </div>
+            </section>
+          </section>
+          <section id="view-history" class="view" hidden>
+            <div class="heading">
+              <div>
+                <p class="eyebrow">MINDEN SORSOLÁS VISSZANÉZHETŐ</p>
+                <h1>Előző sorsolások</h1>
+                <p>Ki sorsolt, ki nyert, és mi volt a nyeremény.</p>
+              </div>
+            </div>
+            <div id="history-list" class="history-list"></div>
+          </section>
+          <section id="view-audit" class="view" hidden>
+            <div class="heading">
+              <div>
+                <p class="eyebrow">ÁTLÁTHATÓ MŰKÖDÉS</p>
+                <h1>Audit napló</h1>
+                <p>Állapotváltozások, sorsolások és bot-visszaigazolások.</p>
+              </div>
+            </div>
+            <section class="card">
+              <div class="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Időpont</th>
+                      <th>Művelet</th>
+                      <th>Végrehajtó</th>
+                    </tr>
+                  </thead>
+                  <tbody id="audit-list"></tbody>
+                </table>
+              </div>
+            </section>
+          </section>
+          <section id="view-overlay" class="view" hidden>
+            <div class="heading">
+              <div>
+                <p class="eyebrow">A SORSOLÁS AZ ADÁSBAN</p>
+                <h1>OBS overlay</h1>
+                <p>
+                  Átlátszó animáció a győztes, a nyeremény és a sorsoló nevével.
+                </p>
+              </div>
+            </div>
+            <section class="card overlay-card">
+              <div class="overlay-preview">
+                <span>✦</span>
+                <p>PAPLOVAG NYEREMÉNYJÁTÉK</p>
+                <h2>A következő szerencsés…</h2>
+                <small>A rögzített eredmény itt jelenik meg.</small>
+              </div>
+              <div>
+                <h2>Hozzáadás az OBS-hez</h2>
+                <p>
+                  Készíts egy csak megjelenítésre jogosító címet, majd illeszd
+                  be egy OBS böngészőforrásba. Javasolt méret: 1920 × 1080.
+                </p>
+                <button id="generate-overlay" class="button primary">
+                  Új overlay-cím készítése</button
+                ><label
+                  >OBS böngészőforrás címe<input
+                    id="overlay-url"
+                    readonly
+                    placeholder="A cím itt jelenik meg" /></label
+                ><small
+                  >Az új cím érvényteleníti az előzőt. A cím 30 napig
+                  használható.</small
+                >
+              </div>
+            </section>
+          </section>
+        </main>
+        <footer class="page-footer">
+          PAPLOVAG MOD CENTER
+          <span
+            >100 garas / jegy · 2× támogatói súly · Twitch / YouTube /
+            Kick</span
+          >
+        </footer>
+      </div>
+    </div>
+    <dialog id="winner-dialog">
+      <button id="close-winner" class="icon-button" aria-label="Bezárás">
+        ×
+      </button>
+      <p class="eyebrow">✦ MEGVAN A NYERTES ✦</p>
+      <h2 id="winner-name"></h2>
+      <p id="winner-prize"></p>
+      <small id="winner-mod"></small>
+      <div id="draw-details" hidden>
+        <p id="snapshot-hash"></p>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Név</th>
+                <th>Platform</th>
+                <th>Jegy</th>
+                <th>Súly</th>
+              </tr>
+            </thead>
+            <tbody id="draw-snapshot"></tbody>
+          </table>
+        </div>
+      </div>
+      <button id="next-game" class="button secondary wide">
+        Vissza a játékhoz
+      </button>
+    </dialog>
+  </body>
+</html>
