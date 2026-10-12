@@ -1,0 +1,15 @@
+PAPLOVAG MOD CENTER – FELÜLET
+
+Új felület: /mod/. Védett adatok és műveletek: /api/mod/*.
+Belépés, session és giveaway backend a paplovag-kingdom MOD modulban, meglévő secret bindingokkal.
+A frontend proxy csak __Host-mod_session és __Host-mod_oauth cookie-kat továbbít.
+A MOD-origin HTTPS legyen; cookie-k Secure/HttpOnly/SameSite=Lax értékkel működnek.
+Twitch callback: https://paplovag.hu/api/mod/auth/callback.
+Átmeneti /mod/?demo=1 előnézet kizárólag mintaadatokat kezel; nem OAuth bypass a backendhez.
+A production API a demo paramétert nem értelmezi; admin adatot mindig friss jogosultság alapján ad.
+Preview környezetben a proxy UPSTREAM konstansa a teszt Kingdom-host legyen, MOD_PUBLIC_ORIGIN pedig a preview origin.
+Teljes bekötési leírás: paplovag-kingdom/docs/MOD_CENTER_SETUP_HU.txt.
+
+Elkészült: beállítások, platformonkénti résztvevők és szűrés, előzmények, audit, Twitch stream/chat embed,
+OBS read-only overlay, külön 403 oldal. A botkapcsolat nélkül a tényleges nyitás blokkolt.
+Twitch és Streamer.bot valódi integrációs teszt még szükséges; éles telepítés nem történt.
