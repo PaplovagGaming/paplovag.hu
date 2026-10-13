@@ -141,9 +141,9 @@
                   ></label>
                   <div class="field-pair">
                     <label
-                      >Jegy ára
-                      <div class="fixed-input">
-                        100 <span>garas</span>
+                      >Jegy ára (fix)
+                      <div class="fixed-price">
+                        100 garas / jegy
                       </div></label
                     ><label
                       >Maximum / platform<input
@@ -203,6 +203,12 @@
                   ><button data-action="draw" class="button primary wide">
                     ✦ Sorsolás indítása
                   </button>
+                  <button data-action="reroll" class="button primary wide">✦ Újrasorsolás</button>
+                  <section id="claim-panel" class="claim-panel" hidden aria-live="polite">
+                    <strong id="claim-winner"></strong>
+                    <div id="claim-clock" class="claim-clock"></div>
+                    <p id="claim-status"></p>
+                  </section>
                   <p id="pending-label" class="muted"></p>
                 </div>
               </section>
@@ -378,10 +384,11 @@
       <button id="close-winner" class="icon-button" aria-label="Bezárás">
         ×
       </button>
-      <p class="eyebrow">✦ MEGVAN A NYERTES ✦</p>
+      <p class="eyebrow">✦ KISORSOLT NÉV ✦</p>
       <h2 id="winner-name"></h2>
       <p id="winner-prize"></p>
       <small id="winner-mod"></small>
+      <p id="winner-claim-clock" class="claim-clock" hidden></p>
       <div id="draw-details" hidden>
         <p id="snapshot-hash"></p>
         <div class="table-scroll">

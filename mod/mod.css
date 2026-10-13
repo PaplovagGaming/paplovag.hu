@@ -407,6 +407,12 @@ select:focus {
   color: var(--muted);
   font-size: 11px;
 }
+.fixed-price { margin-top: 12px; font-size: 17px; font-weight: 700; color: var(--text); }
+.claim-panel { padding: 18px; border: 1px solid #8a67bb; border-radius: 12px; background: #21172e; text-align: center; }
+.claim-clock { font-size: 38px; font-weight: 800; margin: 12px 0; color: #f8d477; font-variant-numeric: tabular-nums; }
+.claim-panel p { font-size: 13px; line-height: 1.5; }
+tr.excluded { opacity: .5; }
+.excluded-note { display: block; color: #edb583; font-size: 11px; }
 .platform-section {
   padding-top: 2px;
   padding-bottom: 20px;
