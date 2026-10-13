@@ -8,6 +8,7 @@ const demo = new URLSearchParams(location.search).get("demo") === "1";
 let lastId = "",
   playing = false;
 let currentDraw=null,clockOffset=0;
+let fetching=false,nextPollAt=0,retryDelay=5000;
 const serverTime=()=>Date.now()+clockOffset;
 const claimHidden=d=>d?.claim_status==='claimed'&&Number.isFinite(Date.parse(d.claimed_at))&&serverTime()>=Date.parse(d.claimed_at)+4000;
 function countdown() {
@@ -61,7 +62,7 @@ async function reveal(draw) {
   countdown();
 }
 async function poll() {
-  if (playing) return;
+  if (playing || fetching || Date.now()<nextPollAt) return;
   if (demo) {
     if (!lastId) {
       lastId = "demo";
@@ -81,24 +82,29 @@ async function poll() {
     return;
   }
   try {
+    fetching=true;nextPollAt=Date.now()+1000;
     const r = await fetch("/api/mod/overlay", {
       headers: { authorization: `Bearer ${token}` },
       cache: "no-store",
+      signal:typeof AbortSignal!=='undefined'&&AbortSignal.timeout?AbortSignal.timeout(8000):undefined,
     });
-    if (r.status===401) {status("Az overlay címe érvénytelen vagy lecserélték. Másold be a MOD Centerben generált teljes címet az OBS-be.");return;}
+    if (r.status===401) {nextPollAt=Date.now()+60000;status("Az overlay címe érvénytelen vagy lecserélték. Másold be a MOD Centerben generált teljes címet az OBS-be.");return;}
     if (!r.ok) throw new Error();
     const { draw,serverNow } = await r.json();
-    clockOffset=Date.parse(serverNow)-Date.now();currentDraw=draw;
+    clockOffset=Date.parse(serverNow)-Date.now();currentDraw=draw;retryDelay=5000;
     status("");
-    if(!draw){document.querySelector('#result').hidden=true;lastId='';countdown();return;}
-    if(claimHidden(draw)){document.querySelector('#result').hidden=true;lastId=draw.id;countdown();return;}
+    if(!draw){nextPollAt=Date.now()+2000;document.querySelector('#result').hidden=true;lastId='';countdown();return;}
+    if(claimHidden(draw)){nextPollAt=Date.now()+2000;document.querySelector('#result').hidden=true;lastId=draw.id;countdown();return;}
     if (draw && draw.id !== lastId) {
       lastId = draw.id;
       reveal(draw);
     }
     countdown();
   } catch {
+    nextPollAt=Date.now()+retryDelay;retryDelay=Math.min(60000,retryDelay*2);
     status("Az overlay kapcsolata megszakadt. Újrapróbálás…");
+  } finally {
+    fetching=false;
   }
 }
 poll();
