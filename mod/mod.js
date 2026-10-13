@@ -38,7 +38,7 @@ const errors = {
   mod_service_unavailable:
     "A MOD háttérszolgáltatás még nem érhető el. A bekötésig nincs élő adat vagy művelet.",
   bot_not_ready:
-    "A Streamer.bot és mindhárom platform kapcsolata szükséges a megnyitáshoz.",
+    "Nem érkezett friss állapot a Streamer.bot adaptertől. Ellenőrizd, hogy az időzítő akció engedélyezve van-e.",
   invalid_keyword: "A kulcsszó 2–32 betű, szám, kötőjel vagy aláhúzás lehet.",
   invalid_prize: "Adj meg egy legfeljebb 200 karakteres nyereményt.",
   invalid_ticket_limit: "A maximum 1–10 jegy lehet platformonként.",
