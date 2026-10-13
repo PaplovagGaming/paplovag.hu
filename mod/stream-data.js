@@ -40,7 +40,7 @@
  }
  function showResults(results,intent){const box=$('#stream-data-results');box.replaceChildren();const failed=[];
   for(const [p,result]of Object.entries(results)){const row=el('div',null,'stream-save-result '+(result.ok?'success':'failure'));row.append(el('strong',names[p]+': '),el('span',result.ok?result.changed?'Sikeres módosítás.' : 'Változatlan; nem történt módosítás.':message(result)));box.append(row);
-   if(result.ok){if(result.data){cards[p].dirty=false;renderPlatform(p,{ok:true,data:result.data});}if(result.refreshRequired)row.append(el('p','A módosítás sikerült, az új adatok ellenőrzéséhez kézi frissítés szükséges.'));}else failed.push(p);
+   if(result.ok){if(result.data){cards[p].dirty=false;renderPlatform(p,{ok:true,data:result.data});}if(result.refreshRequired)row.append(el('p','A módosítás sikerült, az új adatok ellenőrzéséhez kézi frissítés szükséges.'));if(result.auditPending)row.append(el('p','A naplóbejegyzés véglegesítése nem sikerült; az előzetes bejegyzés megmaradt.'));}else failed.push(p);
   }
   if(failed.length){const retry=el('button','Újrapróbálás: '+failed.map(p=>names[p]).join(', '),'button secondary');retry.type='button';const wait=Math.max(...failed.map(p=>results[p].retryAfter||0))*1000,availableAt=Date.now()+wait;retry.addEventListener('click',()=>{if(Date.now()<availableAt){$('#stream-data-status').textContent='A platform által kért várakozási idő még nem telt le.';return;}execute({...intent,platforms:failed,requestId:crypto.randomUUID()});});box.append(retry);}
  }
