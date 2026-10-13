@@ -15,6 +15,35 @@ let state = {
   draftDirty = false,
   formRevision = 0;
 let clockOffset = 0, rollingDialog = "", dialogTimer;
+const viewNames={active:"Nyereményjáték",stream:"Élő stream",history:"Előző sorsolások",audit:"Audit napló",overlay:"OBS overlay"};
+const presenceTab=crypto.randomUUID();
+let presenceSequence=0,presenceTimer,presenceEnabled=false;
+function renderPresence(moderators) {
+  const list=$("#presence-list");list.replaceChildren();
+  text($("#presence-count"),moderators.length);
+  for(const mod of moderators) {
+    const row=element("div","presence-row"),badge=element("span","presence-avatar",mod.name.slice(0,2).toUpperCase()),info=element("div","presence-info");
+    const label=element("strong","",mod.name+(mod.id===user.id?" · Te":""));
+    info.append(label,element("small","",viewNames[mod.view]||"MOD Center"));row.append(badge,info);row.title=label.textContent+" · "+(viewNames[mod.view]||"MOD Center");list.append(row);
+  }
+  text($("#presence-status"),moderators.length?"Az oldalt éppen néző moderátorok.":"Most nincs más aktív moderátor.");
+}
+async function updatePresence(active=!document.hidden,leaving=false) {
+  if(!presenceEnabled)return;
+  if(demo){renderPresence([{id:"demo",name:user.name,view},{id:"demo-2",name:"TavernaMod",view:"stream"}]);return;}
+  const sequence=++presenceSequence;
+  try {
+    const response=await fetch("/api/mod/presence",{method:"POST",credentials:"same-origin",keepalive:leaving,signal:AbortSignal.timeout(8000),headers:{"content-type":"application/json"},body:JSON.stringify({tabId:presenceTab,sequence,active,view})});
+    if(!response.ok)throw new Error("presence_unavailable");
+    const result=await response.json();
+    if(sequence===presenceSequence&&!leaving)renderPresence(result.moderators);
+  } catch {
+    if(sequence===presenceSequence&&!leaving){$("#presence-list").replaceChildren();text($("#presence-count"),"–");text($("#presence-status"),"A jelenléti lista most nem érhető el.");}
+  }
+}
+document.addEventListener("visibilitychange",()=>updatePresence(!document.hidden,document.hidden));
+window.addEventListener("pagehide",()=>updatePresence(false,true));
+window.addEventListener("pageshow",()=>{if(presenceEnabled)updatePresence();});
 const serverTime = () => Date.now() + clockOffset;
 const actions = {
   draft: ["open", "archive"],
@@ -101,6 +130,8 @@ async function api(path, body) {
   return data;
 }
 function forbidden(code) {
+  if(presenceEnabled)updatePresence(false,true);
+  presenceEnabled=false;clearInterval(presenceTimer);
   if (code === "forbidden") {
     location.replace("/mod/forbidden/");
     return;
@@ -307,13 +338,9 @@ function switchView(name) {
   );
   text(
     $("#view-title"),
-    {
-      active: "Nyereményjáték",
-      history: "Előző sorsolások",
-      audit: "Audit napló",
-      overlay: "OBS overlay",
-    }[name],
+    viewNames[name],
   );
+  updatePresence();
 }
 async function refresh() {
   if (demo) {
@@ -549,7 +576,7 @@ function demoMutation(path, body) {
 }
 async function init() {
   if (demo) {
-    user = { name: "Paplovag MOD" };
+    user = { id:"demo",name: "Paplovag MOD" };
     state = {
       active: {
         id: "demo",
@@ -625,6 +652,9 @@ async function init() {
   $("#auth-view").hidden = true;
   $("#app").hidden = false;
   await refresh();
+  presenceEnabled=true;
+  await updatePresence();
+  presenceTimer=setInterval(()=>{if(!document.hidden)updatePresence();},20000);
   setInterval(() => {
     if (!document.hidden && !busy) refresh();
   }, 3000);

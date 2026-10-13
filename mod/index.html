@@ -36,6 +36,8 @@
         <nav aria-label="Moderátori menü">
           <button class="nav-item selected" data-view="active">
             <span>◈</span> Nyereményjáték</button
+          ><button class="nav-item" data-view="stream">
+            <span>▶</span> Élő stream</button
           ><button class="nav-item" data-view="history">
             <span>↺</span> Előző sorsolások</button
           ><button class="nav-item" data-view="audit">
@@ -44,6 +46,11 @@
             <span>▣</span> OBS overlay
           </button>
         </nav>
+        <section class="mod-presence" aria-label="Aktív moderátorok">
+          <p class="presence-heading">AKTÍV MODERÁTOROK <span id="presence-count">0</span></p>
+          <div id="presence-list"></div>
+          <small id="presence-status" role="status">Kapcsolódás…</small>
+        </section>
         <div class="sidebar-bottom">
           <a href="https://paplovag.hu/" target="_blank" rel="noopener"
             >Paplovag.hu <span>↗</span></a
@@ -279,11 +286,14 @@
                 Emlékeztető küldése ↗
               </button>
             </section>
+          </section>
+          <section id="view-stream" class="view" hidden>
+            <div class="heading"><div><p class="eyebrow">PAPLOVAG ÉLŐBEN</p><h1>Élő stream</h1><p>Kövesd az adást és a Twitch chatet.</p></div></div>
             <section class="card stream-card">
               <div class="card-heading">
                 <div>
                   <h2>Paplovag stream</h2>
-                  <p>Nézd az adást, és kövesd a chatet a játék mellett.</p>
+                  <p>A lejátszó és a chat egy helyen.</p>
                 </div>
                 <button id="stream-toggle" class="button secondary">
                   Stream betöltése
@@ -364,8 +374,8 @@
                     readonly
                     placeholder="A cím itt jelenik meg" /></label
                 ><small
-                  >Az új cím érvényteleníti az előzőt. A cím 30 napig
-                  használható.</small
+                  >Fix cím, nem jár le. A meglévő OBS-címed továbbra is működik.
+                  Csak új cím készítése érvényteleníti az előzőt.</small
                 >
                 <button id="test-overlay" class="button secondary wide">✦ Overlay teszt – mintanevek</button>
                 <p id="overlay-test-status" class="muted" role="status"></p>
