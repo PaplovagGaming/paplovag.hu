@@ -14,7 +14,7 @@ let state = {
   user = null,
   draftDirty = false,
   formRevision = 0;
-let clockOffset = 0, rollingDialog = "", dialogTimer;
+let clockOffset = 0, rollingDialog = "", dialogTimer,lastRefresh=0,refreshInFlight=false,refreshPending=false,refreshRetryAfter=0;
 const viewNames={active:"Nyereményjáték",stream:"Élő stream",history:"Előző sorsolások",audit:"Audit napló",overlay:"OBS overlay"};
 const presenceTab=crypto.randomUUID();
 let presenceSequence=0,presenceTimer,presenceEnabled=false;
@@ -341,20 +341,28 @@ function switchView(name) {
     viewNames[name],
   );
   updatePresence();
+  if(user&&!busy)refresh();
 }
 async function refresh() {
   if (demo) {
     render();
     return;
   }
+  if(refreshInFlight){refreshPending=true;return;}
+  refreshInFlight=true;
+  const selectedView=view;
   try {
-    state = await api("state");
+    const response=await api(`state?view=${encodeURIComponent(selectedView)}`);
+    state = {...state,...response};lastRefresh=Date.now();refreshRetryAfter=0;
     clockOffset = Date.parse(state.serverNow) - Date.now();
     render();
   } catch (e) {
     if (["unauthorized", "reauth_required", "forbidden"].includes(e.message))
       forbidden(e.message);
-    else notice(errors[e.message] || "Az adatok frissítése nem sikerült.");
+    else {refreshRetryAfter=Date.now()+30000;notice(errors[e.message] || "Az adatok frissítése nem sikerült.");}
+  } finally {
+    refreshInFlight=false;
+    if(refreshPending||view!==selectedView){refreshPending=false;refresh();}
   }
 }
 function renderClaim() {
@@ -656,8 +664,9 @@ async function init() {
   await updatePresence();
   presenceTimer=setInterval(()=>{if(!document.hidden)updatePresence();},20000);
   setInterval(() => {
-    if (!document.hidden && !busy) refresh();
-  }, 3000);
+    const interval=view==='active'?5000:30000;
+    if (!document.hidden && !busy && !refreshInFlight && !$("#app").hidden && Date.now()>=refreshRetryAfter && Date.now()-lastRefresh>=interval) refresh();
+  }, 1000);
   setInterval(()=>{if(state.currentRound){if(demo&&state.currentRound.claim_status==="awaiting"&&serverTime()>=Date.parse(state.currentRound.claim_deadline)){state.currentRound.claim_status="expired";state.entries.filter(e=>e.platform===state.currentRound.winner.platform&&e.user_id===state.currentRound.winner.user_id).forEach(e=>e.excluded=true);}render();}},1000);
   setInterval(tick, 1000);
 }
