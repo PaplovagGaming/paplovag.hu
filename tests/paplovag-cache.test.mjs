@@ -31,10 +31,10 @@ test('failed background refresh retains saved videos and original successful tim
  const result=await c.build({YOUTUBE_OAUTH_CLIENT_ID:'id',YOUTUBE_OAUTH_CLIENT_SECRET:'secret',MEDIA_KIT_ADMIN_PASSWORD:'test'},store,previous,'shorts','snapshot');
  assert.equal(result.shorts[0].id,'saved');assert.equal(result.sectionUpdatedAt.shorts,old.updatedAt);assert.equal(result.sectionStatus.shorts,'error');assert.equal(store.writes[0].options,undefined);
 });
-test('hourly cron refreshes all four video sections without running daily Analytics',async()=>{
+test('daily cron refreshes both Analytics targets and all four video sections',async()=>{
  const code=await readFile(new URL('../cloudflare/media-kit-cron-worker.js',import.meta.url),'utf8');const calls=[];
  const c=vm.createContext({URL,Response,AbortSignal,Intl,console,fetch:async url=>{calls.push(url);return new Response(JSON.stringify({ok:true}));}});vm.runInContext(code.replace('export default {','globalThis.worker={'),c);
  let pending;await c.worker.scheduled({scheduledTime:Date.parse('2026-09-11T10:01:00Z')},{MEDIA_KIT_CRON_SECRET:'secret'},{waitUntil(p){pending=p;}});await pending;
- assert.equal(calls.length,4);assert.ok(calls.every(url=>url.includes('/paplovag-showcase?section=')));
+ assert.equal(calls.length,6);assert.equal(calls.filter(url=>url.includes('/paplovag-showcase?section=')).length,4);
 });
 

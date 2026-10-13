@@ -5,9 +5,9 @@ deployment updates the API/admin, but does **not** publish
 `cloudflare/media-kit-cron-worker.js` to an existing standalone Worker.
 
 Publish this file to the **existing** Media Kit cron Worker, retaining its
-`MEDIA_KIT_CRON_SECRET`. Set its Cron Trigger to `1 * * * *` (UTC). The handler
-refreshes Paplovag video lists every hour and Analytics at 00:01 Europe/Budapest,
-including summer/winter time. `/health` must list
+`MEDIA_KIT_CRON_SECRET`. Set its Cron Trigger to `1 22 * * *` (UTC). The handler
+refreshes both channels' Analytics and all four Paplovag video lists once daily
+at 22:01 UTC (00:01 Budapest in winter, 01:01 in summer). `/health` must list
 both `tuzproba` and `paplovag`; it reports the expected schedule, not the actual
 Cloudflare trigger configuration. Verify the trigger in Cloudflare.
 
@@ -74,15 +74,15 @@ once, or invoke the four cron POST requests before serving the new page. A missi
 snapshot shows a preparation message; it does not start a slow visitor-side build.
 
 The Worker calls POST `/api/paplovag-showcase?section=<section>` once for each of
-`shorts`, `top`, `tech`, `gaming` every hour. Only a valid Paplovag admin session or
+`shorts`, `top`, `tech`, `gaming` once daily. Only a valid Paplovag admin session or
 `Authorization: Bearer <MEDIA_KIT_CRON_SECRET>` can refresh. Requests are separated
 to bound each playlist's work and prevent one failure from stopping other lists.
 The admin button attempts all four and reports section-specific failures.
 
 Deploy the Pages changes and update the existing standalone Worker separately.
-Verify `/health` includes `hourlyVideoTargets`, then check an hourly event and the
-four stored timestamps. Existing Analytics cron timing and Tuzproba data keys are
-unchanged. Tests: `node --test tests/paplovag-*.test.mjs`.
+Verify `/health` includes `dailyVideoTargets`, then check a daily event and the
+four stored timestamps. Both Analytics targets run in the same daily event;
+Tuzproba data keys are unchanged. Tests: `node --test tests/paplovag-*.test.mjs`.
 
 ## Complete Gameplay ranking (2026-09-12)
 
