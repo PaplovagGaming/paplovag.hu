@@ -59,6 +59,8 @@ const errors = {
   winner_not_confirmed: "A nyertes még nem jelentkezett. Lejárat után újrasorsolhatsz.",
   claim_bot_not_ready: "A 90 másodperces jelentkezéshez az új, nyertesi chatválaszt kezelő botadapter szükséges.",
   no_eligible_entries: "Minden résztvevő kiesett; nincs további kisorsolható név.",
+  overlay_test_during_draw: "A kisorsolt nyertes játékát előbb zárd le. A teszt nem takarhatja el a valódi nyertest.",
+  overlay_not_configured: "Előbb készíts overlay-címet, és illeszd be az OBS böngészőforrásába.",
 };
 function text(el, value) {
   el.textContent = value;
@@ -482,6 +484,15 @@ $("#generate-overlay").addEventListener("click", async () => {
   }
 });
 $("#close-winner").addEventListener("click", () => $("#winner-dialog").close());
+$("#test-overlay").addEventListener("click",async()=>{
+  const button=$("#test-overlay"),label=$("#overlay-test-status");button.disabled=true;
+  try {
+    if(demo){text(label,"Előnézeti teszt: nyisd meg a generált mintacímet az OBS-ben.");return;}
+    await api("overlay/test",{requestId:crypto.randomUUID()});
+    text(label,"Teszt elindítva. Az OBS overlayen néhány másodpercen belül mintanevek pörögnek, majd teszt-visszaszámláló indul.");
+  }catch(e){text(label,errors[e.message] || "A tesztet nem sikerült elindítani.");}
+  finally{button.disabled=false;}
+});
 $("#next-game").addEventListener("click", () => $("#winner-dialog").close());
 function demoMutation(path, body) {
   const action = path.split("/").pop();
