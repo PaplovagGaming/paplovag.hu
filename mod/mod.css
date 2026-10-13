@@ -679,10 +679,13 @@ tbody tr:hover {
 .stream-content {
   display: grid;
   grid-template-columns: minmax(0, 1fr) clamp(340px, 26vw, 420px);
-  height: clamp(520px, calc(100dvh - 300px), 900px);
   background: #090a10;
 }
+.stream-player { position: relative; aspect-ratio: 16/9; min-width: 0; }
+.stream-chat { position: relative; min-width: 0; }
 .stream-content iframe {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
@@ -944,11 +947,7 @@ dialog > .icon-button {
     grid-template-columns: 1fr;
     height: auto;
   }
-  .stream-content iframe:first-child {
-    height: auto;
-    aspect-ratio: 16/9;
-  }
-  .stream-content iframe:last-child {
+  .stream-chat {
     height: clamp(480px, 70dvh, 700px);
   }
   .overlay-card {
