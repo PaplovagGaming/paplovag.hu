@@ -678,7 +678,7 @@ tbody tr:hover {
 }
 .stream-content {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(340px, 26vw, 420px);
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 28%);
   background: #090a10;
 }
 .stream-player { position: relative; aspect-ratio: 16/9; min-width: 0; }
@@ -694,6 +694,9 @@ tbody tr:hover {
   border: 0;
 }
 #view-stream .heading { margin-bottom: 20px; }
+@media (min-width: 981px) {
+  main:has(#view-stream:not([hidden])) { max-width: none; padding: 24px; }
+}
 .stream-card .card-heading { padding: 18px 24px; }
 .page-footer {
   border-top: 1px solid var(--line);
