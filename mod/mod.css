@@ -1047,3 +1047,18 @@ dialog > .icon-button {
 dialog:has(#draw-details:not([hidden])) {
   width: min(760px, 94vw);
 }
+/* Stream metadata editor: same cards and controls as the existing MOD workspace. */
+.stream-data-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;margin-bottom:24px}
+.stream-platform-card,.stream-common-panel{padding:24px}
+.stream-current{min-height:100px;padding:18px;background:var(--bg,#11131d);border-radius:12px;margin:16px 0;overflow-wrap:anywhere}
+.stream-current strong{font-size:1.1rem}.stream-current small{color:#a7aec2}
+#view-stream-data input{display:block;width:100%;margin:8px 0 16px;min-height:46px;background:#11131d;color:#f4f5fa;border:1px solid #3a4055;border-radius:8px;padding:12px}
+#view-stream-data label{display:block;font-weight:600;margin-top:16px}
+.stream-category-options{display:grid;gap:6px;margin:12px 0;max-height:260px;overflow:auto}
+.stream-category-option{padding:12px;text-align:left;border:1px solid #3a4055;border-radius:8px;color:#eef0fa;background:#202436;cursor:pointer}
+.stream-category-option:disabled{opacity:.5;cursor:not-allowed}.stream-category-selected,.stream-data-help{color:#a7aec2}
+.stream-common-panel{border:1px solid #7964ef;background:linear-gradient(135deg,#211d37,#171924)}
+.stream-common-save{width:100%;min-height:56px;margin-top:24px;font-size:1.05rem}
+.stream-connect{display:inline-block;margin-top:20px;font-size:.85rem;color:#b7a9ff}
+.stream-save-result{padding:14px;border-radius:8px;margin:12px 0;overflow-wrap:anywhere}.stream-save-result.success{background:#173c31}.stream-save-result.failure{background:#452830}
+@media(max-width:800px){.stream-data-grid{grid-template-columns:1fr}.stream-platform-card,.stream-common-panel{padding:18px}#view-stream-data .heading{flex-wrap:wrap;gap:16px}}
