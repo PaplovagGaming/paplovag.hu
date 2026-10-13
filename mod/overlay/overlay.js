@@ -1,6 +1,9 @@
-const token = location.hash.slice(1) || sessionStorage.getItem("paplovag-overlay-token") || "";
-if(token)sessionStorage.setItem("paplovag-overlay-token",token);
-history.replaceState(null, "", location.pathname + location.search);
+let token = location.hash.slice(1);
+// OBS may restrict browser storage. The configured URL remains the source of truth.
+try {
+  if(!token)token=sessionStorage.getItem("paplovag-overlay-token") || "";
+  if(token)sessionStorage.setItem("paplovag-overlay-token",token);
+} catch { /* Storage is optional; a full overlay URL works without it. */ }
 const demo = new URLSearchParams(location.search).get("demo") === "1";
 let lastId = "",
   playing = false;
@@ -11,7 +14,7 @@ function countdown() {
   if(!d||!d.claim_deadline){el.hidden=true;return;}
   el.hidden=false;
   const left=Math.max(0,Math.ceil((Date.parse(d.claim_deadline)-serverTime())/1000));
-  el.textContent=d.game_status==="archived"?"Nyereményjáték lezárva":d.claim_status==="claimed"?"✓ A nyertes jelentkezett":serverTime()<Date.parse(d.reveal_at)?"✦ Pörgetés…":left===0?"Nem jelentkezett – újrasorsolás következhet":`${left} mp · Írj bármit a ${d.winner.platform} chatbe!`;
+  el.textContent=d.test?(serverTime()<Date.parse(d.reveal_at)?"✦ Tesztpörgetés…":`${left} mp · TESZT – nincs valódi nyertes`):d.game_status==="archived"?"Nyereményjáték lezárva":d.claim_status==="claimed"?"✓ A nyertes jelentkezett":serverTime()<Date.parse(d.reveal_at)?"✦ Pörgetés…":left===0?"Nem jelentkezett – újrasorsolás következhet":`${left} mp · Írj bármit a ${d.winner.platform} chatbe!`;
 }
 function status(text) {
   const el = document.querySelector("#connection");
@@ -22,6 +25,8 @@ async function reveal(draw) {
   playing = true;
   const result = document.querySelector("#result");
   result.hidden = false;
+  const heading=document.querySelector('#overlay-heading');
+  if(heading)heading.textContent=draw.test?'OVERLAY TESZT – MINTANEVEK':'PAPLOVAG NYEREMÉNYJÁTÉK';
   result.classList.add("rolling");
   document.querySelector("#prize").textContent = draw.prize;
   document.querySelector("#moderator").textContent = "";
@@ -59,6 +64,7 @@ async function poll() {
     if (!lastId) {
       lastId = "demo";
       currentDraw={
+        test:true,
         id:"demo",reveal_at:new Date(Date.now()+3000).toISOString(),claim_deadline:new Date(Date.now()+93000).toISOString(),claim_status:"awaiting",
         candidates:["TavernaLovag","Paplovag","GarasVadasz","StreamLovag"],
         prize: "Steam játékkulcs",
@@ -77,13 +83,14 @@ async function poll() {
       headers: { authorization: `Bearer ${token}` },
       cache: "no-store",
     });
+    if (r.status===401) {status("Az overlay címe érvénytelen vagy lecserélték. Másold be a MOD Centerben generált teljes címet az OBS-be.");return;}
     if (!r.ok) throw new Error();
     const { draw,serverNow } = await r.json();
     clockOffset=Date.parse(serverNow)-Date.now();currentDraw=draw;
     status("");
+    if(!draw){document.querySelector('#result').hidden=true;lastId='';countdown();return;}
     if (draw && draw.id !== lastId) {
       lastId = draw.id;
-      sessionStorage.setItem("paplovag-overlay-last", lastId);
       reveal(draw);
     }
     countdown();
