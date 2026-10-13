@@ -4,17 +4,7 @@ const TARGETS = [
 ];
 const VIDEO_TARGETS = ["shorts", "top", "tech", "gaming"].map(section => ({ name: "paplovag-" + section, url: "https://paplovag.hu/api/paplovag-showcase?section=" + section }));
 const TIME_ZONE = "Europe/Budapest";
-
-function budapestTime(date) {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: TIME_ZONE,
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23"
-  }).formatToParts(date);
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return { hour: Number(values.hour), minute: Number(values.minute) };
-}
+const SCHEDULE = "1 22 * * *";
 
 async function refreshOne(env, target) {
   let continuation;
@@ -69,11 +59,7 @@ async function runRefreshes(env, targets = TARGETS) {
 
 export default {
   async scheduled(controller, env, ctx) {
-    const at = new Date(controller.scheduledTime || Date.now());
-    const local = budapestTime(at);
-    if (local.minute !== 1) return;
-    const targets = local.hour === 0 ? [...TARGETS, ...VIDEO_TARGETS] : VIDEO_TARGETS;
-    ctx.waitUntil(runRefreshes(env, targets).then(results => {
+    ctx.waitUntil(runRefreshes(env, [...TARGETS, ...VIDEO_TARGETS]).then(results => {
       if (results.some(result => !result.ok)) throw new Error("Media Kit refresh failed: " + JSON.stringify(results));
     }));
   },
@@ -83,10 +69,11 @@ export default {
     if (url.pathname === "/health") {
       return new Response(JSON.stringify({
         ok: true,
-        schedule: "1 * * * *",
+        schedule: SCHEDULE,
+        scheduleTimeZone: "UTC",
         timeZone: TIME_ZONE,
         targets: TARGETS.map((target) => target.name),
-        hourlyVideoTargets: VIDEO_TARGETS.map(target => target.name)
+        dailyVideoTargets: VIDEO_TARGETS.map(target => target.name)
       }), {
         headers: { "Content-Type": "application/json; charset=utf-8" }
       });

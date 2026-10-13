@@ -150,8 +150,8 @@ test('existing cached history is displayed on load without a Google refresh, wit
   const gap=api().applyAvailableReach({stats:{}},{days:{...history.days,'2026-09-08':undefined}},'2026-09-09');
   assert.equal(gap.youtubeReachSync.windowDays,1);
 });
-test('cron attempts both channels after network failure, rejects failed runs, handles Budapest summer/winter',async()=>{
-  for (const at of ['2026-09-09T22:01:00Z','2026-12-09T23:01:00Z']) {
+test('daily cron attempts both channels after network failure and rejects failed runs or missing configuration',async()=>{
+  for (const at of ['2026-09-09T22:01:00Z','2026-12-09T22:01:00Z']) {
     const calls=[];
     const context=vm.createContext({URL,Response,AbortSignal,Intl,console,fetch:async url=>{calls.push(url);if(calls.length===1)throw new Error('network down');return json({ok:true,data:{youtubeReachSync:{status:'backfilling',daysCached:30}}});}});
     vm.runInContext(cronSource.replace('export default {','globalThis.worker = {'),context);
@@ -162,7 +162,7 @@ test('cron attempts both channels after network failure, rejects failed runs, ha
     assert.match(calls[1],/paplovag-youtube-analytics-refresh/);
     pending=null;
     await context.worker.scheduled({scheduledTime:Date.parse('2026-09-09T21:02:00Z')},{},{waitUntil(p){pending=p;}});
-    assert.equal(pending,null);
+    await assert.rejects(pending,/MEDIA_KIT_CRON_SECRET is not configured/);
   }
 });
 

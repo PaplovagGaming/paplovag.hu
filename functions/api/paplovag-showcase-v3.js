@@ -7,7 +7,7 @@ const SHORTS_PLAYLIST_ID = "PLrH3C01Hh-gmsL1RGeAu-0r4viY6vnA91";
 const TECH_PLAYLIST_ID = "PLrH3C01Hh-gnG5Qs_Xwe3z2yxMFYSwFWh";
 const GAMING_PLAYLIST_ID = "PLrH3C01Hh-gk7hkFKyO7wwne6FYEhdAup";
 const TIME_ZONE = "Europe/Budapest";
-const FRESH_MS = 60 * 60 * 1000;
+const FRESH_MS = 24 * 60 * 60 * 1000;
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
