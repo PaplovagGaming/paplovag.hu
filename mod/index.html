@@ -8,6 +8,7 @@
     <title>Paplovag MOD Center</title>
     <link rel="stylesheet" href="/mod/mod.css" />
     <script src="/mod/mod.js" defer></script>
+    <script src="/mod/stream-data.js" defer></script>
   </head>
   <body>
     <div id="auth-view" class="auth-view">
@@ -38,7 +39,8 @@
             <span>◈</span> Nyereményjáték</button
           ><button class="nav-item" data-view="stream">
             <span>▶</span> Élő stream</button
-          ><button class="nav-item" data-view="history">
+          ><button class="nav-item" data-view="stream-data">✎ Stream adatok
+          </button><button class="nav-item" data-view="history">
             <span>↺</span> Előző sorsolások</button
           ><button class="nav-item" data-view="audit">
             <span>☷</span> Audit napló</button
@@ -286,6 +288,22 @@
                 Emlékeztető küldése ↗
               </button>
             </section>
+          </section>
+          <section id="view-stream-data" class="view" hidden>
+            <div class="heading"><div><p class="eyebrow">TWITCH ÉS KICK</p><h1>Stream adatok</h1><p>Platformról lekért cím és kategória. Nincs automatikus frissítés.</p></div><button id="stream-data-refresh" class="button secondary">Adatok frissítése</button></div>
+            <p id="stream-data-status" role="status" aria-live="polite"></p>
+            <div id="stream-data-platforms" class="stream-data-grid"></div>
+            <section class="card stream-common-panel">
+              <p class="eyebrow">EGY MŰVELET, KÉT PLATFORM</p><h2>Közös módosítás</h2>
+              <p>Az üresen hagyott cím és a ki nem választott kategória változatlan marad.</p>
+              <form id="stream-common-form">
+                <label for="stream-common-title">Új streamcím</label><input id="stream-common-title" maxlength="140" placeholder="A jelenlegi címek megtartása" autocomplete="off">
+                <div id="stream-common-category"></div>
+                <button id="stream-common-save" class="button primary stream-common-save" type="submit">Változtatás Twitch-en és Kick-en</button>
+              </form>
+              <div id="stream-data-results" role="status" aria-live="polite"></div>
+            </section>
+            <p class="stream-data-help">A csatornatulajdonos egyszer kapcsolja össze a platformokat az alábbi kapcsolódási gombokkal. A moderátorok ezután a saját MOD-belépésükkel szerkeszthetnek. A változtatások az Audit naplóba kerülnek.</p>
           </section>
           <section id="view-stream" class="view" hidden>
             <div class="heading"><div><p class="eyebrow">PAPLOVAG ÉLŐBEN</p><h1>Élő stream</h1><p>Kövesd az adást és a Twitch chatet.</p></div></div>

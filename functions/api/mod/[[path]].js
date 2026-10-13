@@ -24,7 +24,7 @@ export async function onRequest({ request }) {
       headers,
       body: ["GET", "HEAD"].includes(request.method) ? undefined : request.body,
       redirect: "manual",
-      signal: AbortSignal.timeout(20000),
+      signal: AbortSignal.timeout(url.pathname.startsWith('/api/mod/stream')?45000:20000),
     });
     const resultHeaders = new Headers(response.headers);
     resultHeaders.set("cache-control", "no-store");

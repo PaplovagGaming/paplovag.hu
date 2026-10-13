@@ -15,7 +15,7 @@ let state = {
   draftDirty = false,
   formRevision = 0;
 let clockOffset = 0, rollingDialog = "", dialogTimer,lastRefresh=0,refreshInFlight=false,refreshPending=false,refreshRetryAfter=0;
-const viewNames={active:"Nyereményjáték",stream:"Élő stream",history:"Előző sorsolások",audit:"Audit napló",overlay:"OBS overlay"};
+const viewNames={active:"Nyereményjáték",stream:"Élő stream","stream-data":"Stream adatok",history:"Előző sorsolások",audit:"Audit napló",overlay:"OBS overlay"};
 const presenceTab=crypto.randomUUID();
 let presenceSequence=0,presenceTimer,presenceEnabled=false;
 function renderPresence(moderators) {
@@ -309,10 +309,21 @@ function render() {
           archived: "Archiválva",
           purchase_committed: "Jegyvásárlás visszaigazolva",
           message_ack: "Chatüzenet visszaigazolva",
+          stream_update: "Stream adatok módosítása",
         }[e.action] || e.action,
       ),
       element("td", "", e.actor_name),
     );
+    if(e.action==='stream_update'){
+      try{const d=typeof e.details==='string'?JSON.parse(e.details):e.details;
+        row.children[1].textContent=`Stream · ${d.platform} · ${d.status}`;
+        row.children[1].append(element('small','',[
+          d.before.title!==undefined?`Cím: ${d.before.title} → ${d.after.title}`:'',
+          d.before.category?`Kategória: ${d.before.category.name} → ${d.after.category.name}`:'',
+          d.error||''
+        ].filter(Boolean).join(' · ')));
+      }catch{}
+    }
     $("#audit-list").append(row);
   }
   tick();
@@ -331,6 +342,7 @@ function tick() {
   } else text($("#stat-reminder"), "—");
 }
 function switchView(name) {
+  if(user?.streamOnly&&name!=='stream-data')return;
   view = name;
   $$(".view").forEach((v) => (v.hidden = v.id !== `view-${name}`));
   $$("[data-view]").forEach((b) =>
@@ -341,9 +353,11 @@ function switchView(name) {
     viewNames[name],
   );
   updatePresence();
+  if(name==='stream-data'){window.ModStreamData?.open();return;}
   if(user&&!busy)refresh();
 }
 async function refresh() {
+  if(view==='stream-data')return;
   if (demo) {
     render();
     return;
@@ -659,13 +673,15 @@ async function init() {
   }
   $("#auth-view").hidden = true;
   $("#app").hidden = false;
-  await refresh();
+  if(user.streamOnly)$$("[data-view]").forEach(b=>{if(b.dataset.view!=='stream-data')b.hidden=true;});
+  const initialView=user.streamOnly?'stream-data':new URLSearchParams(location.search).get('view');
+  if(initialView&&viewNames[initialView])switchView(initialView);else await refresh();
   presenceEnabled=true;
   await updatePresence();
   presenceTimer=setInterval(()=>{if(!document.hidden)updatePresence();},20000);
   setInterval(() => {
     const interval=view==='active'?5000:30000;
-    if (!document.hidden && !busy && !refreshInFlight && !$("#app").hidden && Date.now()>=refreshRetryAfter && Date.now()-lastRefresh>=interval) refresh();
+    if (view!=='stream-data' && !document.hidden && !busy && !refreshInFlight && !$("#app").hidden && Date.now()>=refreshRetryAfter && Date.now()-lastRefresh>=interval) refresh();
   }, 1000);
   setInterval(()=>{if(state.currentRound){if(demo&&state.currentRound.claim_status==="awaiting"&&serverTime()>=Date.parse(state.currentRound.claim_deadline)){state.currentRound.claim_status="expired";state.entries.filter(e=>e.platform===state.currentRound.winner.platform&&e.user_id===state.currentRound.winner.user_id).forEach(e=>e.excluded=true);}render();}},1000);
   setInterval(tick, 1000);
