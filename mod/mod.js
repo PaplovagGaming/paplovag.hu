@@ -16,9 +16,9 @@ let state = {
   formRevision = 0;
 const actions = {
   draft: ["open", "archive"],
-  open: ["close", "remind", "refresh-supporters"],
+  open: ["close", "remind"],
   closing: [],
-  closed: ["draw", "refresh-supporters"],
+  closed: ["draw"],
 };
 const statusNames = {
   draft: "Előkészítés",
@@ -48,7 +48,7 @@ const errors = {
   no_entries: "Nincs visszaigazolt résztvevő, ezért még nem lehet sorsolni.",
   pending_purchases: "Még van egyeztetésre váró vásárlás.",
   supporter_status_stale:
-    "Friss támogatói státusz szükséges. Kérj frissítést a bottól, majd próbáld újra.",
+    "Hiányzik a nevezéskor rögzített támogatói státusz. A sorsolásig ezt igazolni kell.",
   invalid_game_state: "Ez a művelet a jelenlegi állapotban nem végezhető el.",
   close_before_draw:
     "A botnak előbb vissza kell igazolnia a nevezések lezárását.",
@@ -153,7 +153,7 @@ function render() {
     $("#stat-supporters"),
     format(
       entries.filter(
-        (e) => e.supporter && Date.now() - Date.parse(e.supporter_at) < 120000,
+        (e) => e.supporter && Number.isFinite(Date.parse(e.supporter_at)),
       ).length,
     ),
   );
@@ -185,13 +185,12 @@ function render() {
     platform.append(platformBadge(e.platform));
     const supporter = element("td");
     const fresh =
-      Number.isFinite(Date.parse(e.supporter_at)) &&
-      Date.now() - Date.parse(e.supporter_at) < 120000;
+      Number.isFinite(Date.parse(e.supporter_at));
     supporter.append(
       element(
         "span",
         e.supporter ? "support-active" : "support-inactive",
-        fresh ? (e.supporter ? "✦ Aktív" : "Nem támogató") : "Frissítésre vár",
+        fresh ? (e.supporter ? "✦ Támogató nevezéskor" : "Nem támogató nevezéskor") : "Igazolásra vár",
       ),
     );
     row.append(
@@ -210,7 +209,7 @@ function render() {
   $("#participants-empty").hidden = filtered.length > 0;
   text(
     $("#announcement-text"),
-    `🎁 Nyereményjáték! ${$("#prize").value || "{nyeremény}"} | Nevezés: !${$("#keyword").value || "{kulcsszó}"} <garas> | 100 garas/jegy, max. ${$("#max-tickets").value || 10} jegy/platform. Az adott platform aktív támogatói 2× sorsolási súlyt kapnak.`,
+    `🎁 Nyereményjáték! ${$("#prize").value || "{nyeremény}"} | Nevezés: !${$("#keyword").value || "{kulcsszó}"} <garas> | 100 garas/jegy, max. ${$("#max-tickets").value || 10} jegy/platform. Az adott platformon nevezéskor aktív támogatók 2× sorsolási súlyt kapnak.`,
   );
   $("#history-list").replaceChildren();
   if (!state.history.length)
