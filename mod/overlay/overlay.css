@@ -64,6 +64,7 @@ small {
   background: #241a32cc;
   color: #d2bee9;
 }
+#claim-clock { margin-top: 25px; color: #f8d477; font-size: clamp(20px,3vw,40px); font-weight: 700; font-variant-numeric: tabular-nums; }
 .confetti {
   position: absolute;
   width: 10px;

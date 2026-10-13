@@ -1,8 +1,18 @@
-const token = location.hash.slice(1);
+const token = location.hash.slice(1) || sessionStorage.getItem("paplovag-overlay-token") || "";
+if(token)sessionStorage.setItem("paplovag-overlay-token",token);
 history.replaceState(null, "", location.pathname + location.search);
 const demo = new URLSearchParams(location.search).get("demo") === "1";
-let lastId = sessionStorage.getItem("paplovag-overlay-last") || "",
+let lastId = "",
   playing = false;
+let currentDraw=null,clockOffset=0;
+const serverTime=()=>Date.now()+clockOffset;
+function countdown() {
+  const d=currentDraw,el=document.querySelector("#claim-clock");
+  if(!d||!d.claim_deadline){el.hidden=true;return;}
+  el.hidden=false;
+  const left=Math.max(0,Math.ceil((Date.parse(d.claim_deadline)-serverTime())/1000));
+  el.textContent=d.game_status==="archived"?"Nyereményjáték lezárva":d.claim_status==="claimed"?"✓ A nyertes jelentkezett":serverTime()<Date.parse(d.reveal_at)?"✦ Pörgetés…":left===0?"Nem jelentkezett – újrasorsolás következhet":`${left} mp · Írj bármit a ${d.winner.platform} chatbe!`;
+}
 function status(text) {
   const el = document.querySelector("#connection");
   el.textContent = text;
@@ -15,7 +25,7 @@ async function reveal(draw) {
   result.classList.add("rolling");
   document.querySelector("#prize").textContent = draw.prize;
   document.querySelector("#moderator").textContent = "";
-  const names = ["✦", "A következő szerencsés…", "✦"];
+  const names = draw.candidates?.length ? draw.candidates : ["✦", "A következő szerencsés…", "✦"];
   let i = 0;
   const interval = setInterval(
     () =>
@@ -23,7 +33,7 @@ async function reveal(draw) {
         names[i++ % names.length]),
     180,
   );
-  await new Promise((r) => setTimeout(r, 2400));
+  await new Promise((r) => setTimeout(r, Math.max(0,Date.parse(draw.reveal_at || new Date(serverTime()+3000).toISOString())-serverTime())));
   clearInterval(interval);
   result.classList.remove("rolling");
   document.querySelector("#winner").textContent = draw.winner.display_name;
@@ -41,17 +51,20 @@ async function reveal(draw) {
     setTimeout(() => piece.remove(), 4500);
   }
   playing = false;
+  countdown();
 }
 async function poll() {
   if (playing) return;
   if (demo) {
     if (!lastId) {
       lastId = "demo";
-      reveal({
+      currentDraw={
+        id:"demo",reveal_at:new Date(Date.now()+3000).toISOString(),claim_deadline:new Date(Date.now()+93000).toISOString(),claim_status:"awaiting",
+        candidates:["TavernaLovag","Paplovag","GarasVadasz","StreamLovag"],
         prize: "Steam játékkulcs",
         winner: { display_name: "TavernaLovag", platform: "twitch" },
         actor_name: "Paplovag MOD",
-      });
+      };reveal(currentDraw);
     }
     return;
   }
@@ -65,16 +78,19 @@ async function poll() {
       cache: "no-store",
     });
     if (!r.ok) throw new Error();
-    const { draw } = await r.json();
+    const { draw,serverNow } = await r.json();
+    clockOffset=Date.parse(serverNow)-Date.now();currentDraw=draw;
     status("");
     if (draw && draw.id !== lastId) {
       lastId = draw.id;
       sessionStorage.setItem("paplovag-overlay-last", lastId);
       reveal(draw);
     }
+    countdown();
   } catch {
     status("Az overlay kapcsolata megszakadt. Újrapróbálás…");
   }
 }
 poll();
-setInterval(poll, 3000);
+setInterval(poll, 1000);
+setInterval(countdown,250);
