@@ -9,8 +9,10 @@ let lastId = "",
   playing = false;
 let currentDraw=null,clockOffset=0;
 const serverTime=()=>Date.now()+clockOffset;
+const claimHidden=d=>d?.claim_status==='claimed'&&Number.isFinite(Date.parse(d.claimed_at))&&serverTime()>=Date.parse(d.claimed_at)+4000;
 function countdown() {
   const d=currentDraw,el=document.querySelector("#claim-clock");
+  if(claimHidden(d))document.querySelector('#result').hidden=true;
   if(!d||!d.claim_deadline){el.hidden=true;return;}
   el.hidden=false;
   const left=Math.max(0,Math.ceil((Date.parse(d.claim_deadline)-serverTime())/1000));
@@ -89,6 +91,7 @@ async function poll() {
     clockOffset=Date.parse(serverNow)-Date.now();currentDraw=draw;
     status("");
     if(!draw){document.querySelector('#result').hidden=true;lastId='';countdown();return;}
+    if(claimHidden(draw)){document.querySelector('#result').hidden=true;lastId=draw.id;countdown();return;}
     if (draw && draw.id !== lastId) {
       lastId = draw.id;
       reveal(draw);
