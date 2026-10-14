@@ -36,3 +36,12 @@ test('late first delivery spins locally but keeps original claim deadline; old p
 test('expiration is presentation only, OBS disconnect/idle clears and reconnection resumes',()=>{const f=fixture(),d=f.draw();f.packet(d);f.advance(94000);assert.match(f.elements['claim-clock'].textContent,/Nem jelentkezett/);
  f.listeners.get('obsExit')();assert.equal(f.elements.result.hidden,true);f.packet({...d,claim_status:'expired'});assert.equal(f.confetti(),65);f.packet(null);assert.equal(f.elements.result.hidden,true);assert.equal(f.requests(),0);});
 test('invalid event payload or protocol cannot start an animation',()=>{const f=fixture();f.packet(f.draw(),{protocol:'other'});f.packet({...f.draw(),winner:{display_name:'Fake',platform:'bad'}});assert.equal(f.elements.result.hidden,true);});
+test('late overlay test spins three seconds and hides after seven; replays never extend it',()=>{
+ const f=fixture(),d=f.draw('test-1',{test:true,claim_status:'test'});f.advance(20000);f.packet(d);
+ assert.equal(f.elements.result.hidden,false);assert.notEqual(f.elements.winner.textContent,'Chosen');
+ f.advance(3100);assert.equal(f.elements.winner.textContent,'Chosen');assert.equal(f.confetti(),65);
+ f.packet(d,{replay:true});f.advance(3800);assert.equal(f.elements.result.hidden,false);
+ f.advance(350);assert.equal(f.elements.result.hidden,true);f.packet(d,{replay:true});assert.equal(f.elements.result.hidden,true);
+ f.advance(20000);f.packet(d,{replay:true});assert.equal(f.elements.result.hidden,true);assert.equal(f.confetti(),65);assert.equal(f.requests(),0);
+ f.packet(f.draw('test-2',{test:true,claim_status:'test'}));assert.equal(f.elements.result.hidden,false);
+});
