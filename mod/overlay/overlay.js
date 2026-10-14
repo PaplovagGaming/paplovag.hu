@@ -3,12 +3,12 @@
 const demo=new URLSearchParams(location.search).get('demo')==='1';
 const soundParams=new URLSearchParams(location.search),requestedVolume=Number(soundParams.get('volume'));
 const soundVolume=soundParams.get('sound')==='0'?0:soundParams.has('volume')&&Number.isFinite(requestedVolume)?Math.max(0,Math.min(100,requestedVolume))/100:0.35;
-let audioContext=null;
+let audioContext=null,rouletteClick=null;
 const playingSounds=new Set();
 function audio(){
  if(!soundVolume)return null;
  try{const Audio=window.AudioContext||window.webkitAudioContext;if(!Audio)return null;
-   if(!audioContext||audioContext.state==='closed')audioContext=new Audio();
+   if(!audioContext||audioContext.state==='closed'){audioContext=new Audio();rouletteClick=null;}
    if(audioContext.state==='suspended'){audioContext.resume().catch(()=>{});return null;}
    return audioContext.state==='running'?audioContext:null;
  }catch{return null;}
@@ -22,8 +22,25 @@ function tone(ctx,frequency,delay,duration,level,type){
    oscillator.start(start);oscillator.stop(start+duration+0.01);
  }catch{}
 }
-function rollSound(){const ctx=audio();if(ctx)tone(ctx,1100,0,0.035,0.12,'triangle');}
-function winSound(){const ctx=audio();if(ctx)[523.25,659.25,783.99,1046.5].forEach((frequency,i)=>tone(ctx,frequency,i*0.16,i===3?0.55:0.15,0.2,'sine'));}
+function rollSound(){const ctx=audio();if(!ctx)return;
+ try{
+   // A short filtered noise burst gives a mechanical wheel click instead of a beep.
+   if(!rouletteClick){rouletteClick=ctx.createBuffer(1,Math.ceil(ctx.sampleRate*0.035),ctx.sampleRate);const samples=rouletteClick.getChannelData(0);
+     for(let i=0;i<samples.length;i++)samples[i]=(Math.random()*2-1)*Math.exp(-i/(ctx.sampleRate*0.006));}
+   const source=ctx.createBufferSource(),filter=ctx.createBiquadFilter(),gain=ctx.createGain();source.buffer=rouletteClick;
+   filter.type='bandpass';filter.frequency.value=2200;filter.Q.value=0.8;gain.gain.value=0.55*soundVolume;
+   source.connect(filter);filter.connect(gain);gain.connect(ctx.destination);playingSounds.add(source);
+   source.onended=()=>{playingSounds.delete(source);source.disconnect();filter.disconnect();gain.disconnect();};source.start();
+ }catch{}
+}
+function winSound(){const ctx=audio();if(!ctx)return;
+ // Brass-like octave layers lead into a fuller major chord; no downloaded audio.
+ [523.25,659.25,783.99,1046.5].forEach((frequency,i)=>{
+   tone(ctx,frequency,i*0.17,0.23,0.25,'triangle');tone(ctx,frequency/2,i*0.17,0.23,0.14,'sawtooth');
+ });
+ [261.63,329.63,392,523.25].forEach(frequency=>tone(ctx,frequency,0.7,1.1,0.17,'triangle'));
+ tone(ctx,130.81,0.7,1.2,0.22,'sine');
+}
 function stopSounds(){for(const oscillator of playingSounds){try{oscillator.stop();}catch{}}playingSounds.clear();}
 // Normal-browser previews may require a gesture; OBS supplies its own audio policy.
 window.addEventListener('pointerdown',audio);
@@ -34,7 +51,7 @@ let seen=new Set(),storageAvailable=true;
 try{seen=new Set(JSON.parse(sessionStorage.getItem('paplovag-overlay-seen-v1')||'[]'));}catch{storageAvailable=false;}
 function remember(id){seen.add(id);if(seen.size>100)seen.delete(seen.values().next().value);try{sessionStorage.setItem('paplovag-overlay-seen-v1',JSON.stringify([...seen]));}catch{}}
 function status(value){$('connection').textContent=value;$('connection').hidden=!value;}
-function stop(){generation++;clearInterval(rollingTimer);rollingTimer=null;stopSounds();$('result').classList.remove('rolling');}
+function stop(){generation++;clearTimeout(rollingTimer);rollingTimer=null;stopSounds();$('result').classList.remove('rolling');}
 function hidden(d){if(!d)return true;const deadline=Date.parse(d.claim_deadline),claimed=Date.parse(d.claimed_at);
  return d.claim_status==='claimed'?Number.isFinite(claimed)&&serverTime()>=claimed+4000:
    d.test&&((testHideAt>0&&serverTime()>=testHideAt)||(Number.isFinite(deadline)&&serverTime()>deadline));
@@ -58,9 +75,13 @@ function reveal(d,replayed){stop();const version=generation;$('result').hidden=f
    !replayed&&d.claim_status==='awaiting'?Math.max(0,Math.min(5000,Date.parse(d.claim_deadline)-serverTime())):originalRemaining;
  localRevealUntil=serverTime()+Math.max(0,remaining);
  if(remaining>0){$('result').classList.add('rolling');const candidates=Array.isArray(d.candidates)?d.candidates.map(n=>typeof n==='string'?n:n?.display_name).filter(n=>typeof n==='string'&&n.trim()):[];
-   const names=candidates.length?candidates:['✦'];let i=0;$('winner').textContent=names[0];if(!replayed)rollSound();
-   rollingTimer=setInterval(()=>{$('winner').textContent=names[i++%names.length];if(!replayed)rollSound();},180);
-   setTimeout(()=>{if(version!==generation||currentDraw?.id!==d.id)return;clearInterval(rollingTimer);rollingTimer=null;$('result').classList.remove('rolling');winner(d,!replayed);countdown();},remaining);
+   const names=candidates.length?candidates:['✦'];let i=1;const started=Date.now();$('winner').textContent=names[0];if(!replayed)rollSound();
+   const scheduleTick=()=>{const elapsed=Date.now()-started,delay=70+350*Math.pow(Math.min(1,elapsed/remaining),2.5);
+     if(elapsed+delay>=remaining)return;
+     rollingTimer=setTimeout(()=>{if(version!==generation||currentDraw?.id!==d.id)return;
+       $('winner').textContent=names[i++%names.length];if(!replayed)rollSound();scheduleTick();},delay);
+   };scheduleTick();
+   setTimeout(()=>{if(version!==generation||currentDraw?.id!==d.id)return;clearTimeout(rollingTimer);rollingTimer=null;$('result').classList.remove('rolling');winner(d,!replayed);countdown();},remaining);
  }else winner(d,!replayed&&d.claim_status!=='expired');
  countdown();
 }
