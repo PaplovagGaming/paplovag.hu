@@ -1,39 +1,20 @@
 // OBS dispatches this CustomEvent through its existing authenticated obs-websocket connection.
 // This page opens no socket and makes no API requests. No OBS/API credential is needed here.
 const demo=new URLSearchParams(location.search).get('demo')==='1';
+// ceil(352591 WAV frames / 44100 Hz * 1000); shared with server reveal scheduling.
+const ROLL_MS=7996;
 const soundParams=new URLSearchParams(location.search),requestedVolume=Number(soundParams.get('volume'));
 const soundVolume=soundParams.get('sound')==='0'?0:soundParams.has('volume')&&Number.isFinite(requestedVolume)?Math.max(0,Math.min(100,requestedVolume))/100:0.35;
-let audioContext=null,rouletteClick=null,victoryAudio=null;
-const playingSounds=new Set();
-function audio(){
- if(!soundVolume)return null;
- try{const Audio=window.AudioContext||window.webkitAudioContext;if(!Audio)return null;
-   if(!audioContext||audioContext.state==='closed'){audioContext=new Audio();rouletteClick=null;}
-   if(audioContext.state==='suspended'){audioContext.resume().catch(()=>{});return null;}
-   return audioContext.state==='running'?audioContext:null;
- }catch{return null;}
-}
-function prepareVictorySound(){
+const soundClips={roll:null,winner:null},soundFiles={roll:'porgetes.wav',winner:'nyertes.wav'};
+function prepareSound(kind){
  if(!soundVolume||!window.Audio)return null;
- try{if(!victoryAudio){victoryAudio=new window.Audio('/mod/overlay/sounds/winning-sfx.mp3');victoryAudio.preload='auto';victoryAudio.volume=soundVolume;victoryAudio.load();}return victoryAudio;}catch{return null;}
+ try{if(!soundClips[kind]){const clip=new window.Audio('/mod/overlay/sounds/'+soundFiles[kind]);clip.preload='auto';clip.volume=soundVolume;clip.load();soundClips[kind]=clip;}return soundClips[kind];}catch{return null;}
 }
-function rollSound(){const ctx=audio();if(!ctx)return;
- try{
-   // A short filtered noise burst gives a mechanical wheel click instead of a beep.
-   if(!rouletteClick){rouletteClick=ctx.createBuffer(1,Math.ceil(ctx.sampleRate*0.035),ctx.sampleRate);const samples=rouletteClick.getChannelData(0);
-     for(let i=0;i<samples.length;i++)samples[i]=(Math.random()*2-1)*Math.exp(-i/(ctx.sampleRate*0.006));}
-   const source=ctx.createBufferSource(),filter=ctx.createBiquadFilter(),gain=ctx.createGain();source.buffer=rouletteClick;
-   filter.type='bandpass';filter.frequency.value=2200;filter.Q.value=0.8;gain.gain.value=0.55*soundVolume;
-   source.connect(filter);filter.connect(gain);gain.connect(ctx.destination);playingSounds.add(source);
-   source.onended=()=>{playingSounds.delete(source);source.disconnect();filter.disconnect();gain.disconnect();};source.start();
- }catch{}
-}
-function winSound(){const clip=prepareVictorySound();if(!clip)return;try{clip.currentTime=0;clip.play()?.catch(()=>{});}catch{}}
-function stopSounds(){for(const oscillator of playingSounds){try{oscillator.stop();}catch{}}playingSounds.clear();
- if(victoryAudio)try{victoryAudio.pause();victoryAudio.currentTime=0;}catch{}
-}
-// Normal-browser previews may require a gesture; OBS supplies its own audio policy.
-window.addEventListener('pointerdown',audio);
+function playSound(kind){const clip=prepareSound(kind);if(clip)try{clip.currentTime=0;clip.play()?.catch(()=>{});}catch{}}
+function pauseSound(kind){const clip=soundClips[kind];if(clip)try{clip.pause();clip.currentTime=0;}catch{}}
+function rollSound(){playSound('roll');}
+function winSound(){pauseSound('roll');playSound('winner');}
+function stopSounds(){pauseSound('roll');pauseSound('winner');}
 const $=id=>document.querySelector('#'+id);
 let currentDraw=null,clockOffset=0,lastServerTime=-Infinity,generation=0,rollingTimer=null,localRevealUntil=0,testHideAt=0;
 const serverTime=()=>Date.now()+clockOffset;
@@ -58,19 +39,19 @@ function winner(d,confetti){$('winner').textContent=d.winner.display_name;$('mod
    piece.style.background=['#b18dff','#e4cbff','#f8d477','#82dab5'][i%4];piece.style.animationDelay=`${Math.random()}s`;document.body.append(piece);setTimeout(()=>piece.remove(),4500);}
 }
 function reveal(d,replayed){stop();const version=generation;$('result').hidden=false;$('prize').textContent=d.prize;
- if(!replayed)prepareVictorySound(); // Fetch the small static clip once, during the roll.
+ if(!replayed){prepareSound('roll');prepareSound('winner');}
  $('overlay-heading').textContent=d.test?'OVERLAY TESZT – MINTANEVEK':'PAPLOVAG NYEREMÉNYJÁTÉK';$('moderator').textContent='';
  const originalRemaining=Date.parse(d.reveal_at)-serverTime();
  // A late first delivery still spins the names; it never extends the server claim deadline.
- const remaining=d.test?Math.max(0,Math.min(5000,replayed?originalRemaining:5000)):
-   !replayed&&d.claim_status==='awaiting'?Math.max(0,Math.min(5000,Date.parse(d.claim_deadline)-serverTime())):originalRemaining;
+ const remaining=d.test?Math.max(0,Math.min(ROLL_MS,replayed?originalRemaining:ROLL_MS)):
+   !replayed&&d.claim_status==='awaiting'?Math.max(0,Math.min(ROLL_MS,Date.parse(d.claim_deadline)-serverTime())):originalRemaining;
  localRevealUntil=serverTime()+Math.max(0,remaining);
  if(remaining>0){$('result').classList.add('rolling');const candidates=Array.isArray(d.candidates)?d.candidates.map(n=>typeof n==='string'?n:n?.display_name).filter(n=>typeof n==='string'&&n.trim()):[];
    const names=candidates.length?candidates:['✦'];let i=1;const started=Date.now();$('winner').textContent=names[0];if(!replayed)rollSound();
    const scheduleTick=()=>{const elapsed=Date.now()-started,delay=70+350*Math.pow(Math.min(1,elapsed/remaining),2.5);
      if(elapsed+delay>=remaining)return;
      rollingTimer=setTimeout(()=>{if(version!==generation||currentDraw?.id!==d.id)return;
-       $('winner').textContent=names[i++%names.length];if(!replayed)rollSound();scheduleTick();},delay);
+       $('winner').textContent=names[i++%names.length];scheduleTick();},delay);
    };scheduleTick();
    setTimeout(()=>{if(version!==generation||currentDraw?.id!==d.id)return;clearTimeout(rollingTimer);rollingTimer=null;$('result').classList.remove('rolling');winner(d,!replayed);countdown();},remaining);
  }else winner(d,!replayed&&d.claim_status!=='expired');
@@ -87,7 +68,7 @@ function receive(event){const packet=event.detail;if(packet?.protocol!=='paplova
  const changed=currentDraw?.id!==d?.id;currentDraw=d;
  // The server test TTL allows delivery across bot polls; it is not a viewer countdown.
  // Set the presentation deadline once per test ID, so replays cannot keep it visible.
- if(changed)testHideAt=d?.test?serverTime()+9000:0;
+ if(changed)testHideAt=d?.test?serverTime()+ROLL_MS+4000:0;
  if(!d||hidden(d)){stop();$('result').hidden=true;countdown();return;}
  // A bot replay means it was sent before, not that this Browser Source displayed it.
  // Prefer the browser's receipt history; when storage is unavailable retain the bot guard.
@@ -98,6 +79,6 @@ window.addEventListener('obsExit',()=>{stop();$('result').hidden=true;status('OB
 // Presentation-only timer: it never contacts Cloudflare and never finalizes a server claim.
 setInterval(countdown,250);
 if(demo){const now=Date.now();receive({detail:{protocol:'paplovag-overlay-v1',eventId:'demo',serverNow:new Date(now).toISOString(),draw:{
- id:'demo',test:true,created_at:new Date(now).toISOString(),reveal_at:new Date(now+3000).toISOString(),claim_deadline:new Date(now+93000).toISOString(),claim_status:'test',
+ id:'demo',test:true,created_at:new Date(now).toISOString(),reveal_at:new Date(now+ROLL_MS).toISOString(),claim_deadline:new Date(now+ROLL_MS+90000).toISOString(),claim_status:'test',
  prize:'Steam játékkulcs',actor_name:'Paplovag MOD',winner:{display_name:'TavernaLovag',platform:'twitch'},candidates:['TavernaLovag','Paplovag','GarasVadasz','StreamLovag']}}});}
 else if(!window.obsstudio)status('Az overlay az OBS Browser Source-ban fogadja a Streamer.bot eseményeit.');
