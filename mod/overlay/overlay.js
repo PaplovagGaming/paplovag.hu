@@ -1,6 +1,32 @@
 // OBS dispatches this CustomEvent through its existing authenticated obs-websocket connection.
 // This page opens no socket and makes no API requests. No OBS/API credential is needed here.
 const demo=new URLSearchParams(location.search).get('demo')==='1';
+const soundParams=new URLSearchParams(location.search),requestedVolume=Number(soundParams.get('volume'));
+const soundVolume=soundParams.get('sound')==='0'?0:soundParams.has('volume')&&Number.isFinite(requestedVolume)?Math.max(0,Math.min(100,requestedVolume))/100:0.35;
+let audioContext=null;
+const playingSounds=new Set();
+function audio(){
+ if(!soundVolume)return null;
+ try{const Audio=window.AudioContext||window.webkitAudioContext;if(!Audio)return null;
+   if(!audioContext||audioContext.state==='closed')audioContext=new Audio();
+   if(audioContext.state==='suspended'){audioContext.resume().catch(()=>{});return null;}
+   return audioContext.state==='running'?audioContext:null;
+ }catch{return null;}
+}
+function tone(ctx,frequency,delay,duration,level,type){
+ try{const oscillator=ctx.createOscillator(),gain=ctx.createGain(),start=ctx.currentTime+delay;
+   oscillator.type=type;oscillator.frequency.setValueAtTime(frequency,start);
+   gain.gain.setValueAtTime(0,start);gain.gain.linearRampToValueAtTime(level*soundVolume,start+0.005);gain.gain.exponentialRampToValueAtTime(0.0001,start+duration);
+   oscillator.connect(gain);gain.connect(ctx.destination);playingSounds.add(oscillator);
+   oscillator.onended=()=>{playingSounds.delete(oscillator);oscillator.disconnect();gain.disconnect();};
+   oscillator.start(start);oscillator.stop(start+duration+0.01);
+ }catch{}
+}
+function rollSound(){const ctx=audio();if(ctx)tone(ctx,1100,0,0.035,0.12,'triangle');}
+function winSound(){const ctx=audio();if(ctx)[523.25,659.25,783.99,1046.5].forEach((frequency,i)=>tone(ctx,frequency,i*0.16,i===3?0.55:0.15,0.2,'sine'));}
+function stopSounds(){for(const oscillator of playingSounds){try{oscillator.stop();}catch{}}playingSounds.clear();}
+// Normal-browser previews may require a gesture; OBS supplies its own audio policy.
+window.addEventListener('pointerdown',audio);
 const $=id=>document.querySelector('#'+id);
 let currentDraw=null,clockOffset=0,lastServerTime=-Infinity,generation=0,rollingTimer=null,localRevealUntil=0,testHideAt=0;
 const serverTime=()=>Date.now()+clockOffset;
@@ -8,7 +34,7 @@ let seen=new Set(),storageAvailable=true;
 try{seen=new Set(JSON.parse(sessionStorage.getItem('paplovag-overlay-seen-v1')||'[]'));}catch{storageAvailable=false;}
 function remember(id){seen.add(id);if(seen.size>100)seen.delete(seen.values().next().value);try{sessionStorage.setItem('paplovag-overlay-seen-v1',JSON.stringify([...seen]));}catch{}}
 function status(value){$('connection').textContent=value;$('connection').hidden=!value;}
-function stop(){generation++;clearInterval(rollingTimer);rollingTimer=null;$('result').classList.remove('rolling');}
+function stop(){generation++;clearInterval(rollingTimer);rollingTimer=null;stopSounds();$('result').classList.remove('rolling');}
 function hidden(d){if(!d)return true;const deadline=Date.parse(d.claim_deadline),claimed=Date.parse(d.claimed_at);
  return d.claim_status==='claimed'?Number.isFinite(claimed)&&serverTime()>=claimed+4000:
    d.test&&((testHideAt>0&&serverTime()>=testHideAt)||(Number.isFinite(deadline)&&serverTime()>deadline));
@@ -20,6 +46,7 @@ function countdown(){const d=currentDraw;if(hidden(d)){$('result').hidden=true;i
    serverTime()<localRevealUntil?'✦ Pörgetés…':left===0?'Nem jelentkezett – újrasorsolás következhet':`${left} mp · Írj bármit a ${d.winner.platform} chatbe!`;
 }
 function winner(d,confetti){$('winner').textContent=d.winner.display_name;$('moderator').textContent=`${d.winner.platform} · Sorsolta: ${d.actor_name}`;
+ if(confetti)winSound();
  if(confetti)for(let i=0;i<65;i++){const piece=document.createElement('i');piece.className='confetti';piece.style.left=`${Math.random()*100}%`;
    piece.style.background=['#b18dff','#e4cbff','#f8d477','#82dab5'][i%4];piece.style.animationDelay=`${Math.random()}s`;document.body.append(piece);setTimeout(()=>piece.remove(),4500);}
 }
@@ -31,8 +58,8 @@ function reveal(d,replayed){stop();const version=generation;$('result').hidden=f
    !replayed&&d.claim_status==='awaiting'?Math.max(0,Math.min(5000,Date.parse(d.claim_deadline)-serverTime())):originalRemaining;
  localRevealUntil=serverTime()+Math.max(0,remaining);
  if(remaining>0){$('result').classList.add('rolling');const candidates=Array.isArray(d.candidates)?d.candidates.map(n=>typeof n==='string'?n:n?.display_name).filter(n=>typeof n==='string'&&n.trim()):[];
-   const names=candidates.length?candidates:['✦'];let i=0;$('winner').textContent=names[0];
-   rollingTimer=setInterval(()=>{$('winner').textContent=names[i++%names.length];},180);
+   const names=candidates.length?candidates:['✦'];let i=0;$('winner').textContent=names[0];if(!replayed)rollSound();
+   rollingTimer=setInterval(()=>{$('winner').textContent=names[i++%names.length];if(!replayed)rollSound();},180);
    setTimeout(()=>{if(version!==generation||currentDraw?.id!==d.id)return;clearInterval(rollingTimer);rollingTimer=null;$('result').classList.remove('rolling');winner(d,!replayed);countdown();},remaining);
  }else winner(d,!replayed&&d.claim_status!=='expired');
  countdown();
