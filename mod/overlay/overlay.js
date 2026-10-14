@@ -30,7 +30,8 @@ function reveal(d,replayed){stop();const version=generation;$('result').hidden=f
  const remaining=d.test?Math.max(0,Math.min(5000,replayed?originalRemaining:5000)):
    !replayed&&d.claim_status==='awaiting'?Math.max(0,Math.min(5000,Date.parse(d.claim_deadline)-serverTime())):originalRemaining;
  localRevealUntil=serverTime()+Math.max(0,remaining);
- if(remaining>0){$('result').classList.add('rolling');const names=d.candidates?.length?d.candidates:['✦'];let i=0;$('winner').textContent=names[0];
+ if(remaining>0){$('result').classList.add('rolling');const candidates=Array.isArray(d.candidates)?d.candidates.map(n=>typeof n==='string'?n:n?.display_name).filter(n=>typeof n==='string'&&n.trim()):[];
+   const names=candidates.length?candidates:['✦'];let i=0;$('winner').textContent=names[0];
    rollingTimer=setInterval(()=>{$('winner').textContent=names[i++%names.length];},180);
    setTimeout(()=>{if(version!==generation||currentDraw?.id!==d.id)return;clearInterval(rollingTimer);rollingTimer=null;$('result').classList.remove('rolling');winner(d,!replayed);countdown();},remaining);
  }else winner(d,!replayed&&d.claim_status!=='expired');
