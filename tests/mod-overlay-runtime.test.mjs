@@ -22,26 +22,36 @@ function fixture({storage=new Map(),blocked=false,obs=true}={}){
  return {elements,storage,draw,packet,advance,now:()=>new ClockDate(clock).toISOString(),confetti:()=>confetti,requests:()=>requests,listeners};
 }
 test('idle OBS overlay makes zero Cloudflare requests or socket connections',()=>{const f=fixture();f.advance(3600000);assert.equal(f.requests(),0);assert.equal(f.elements.result.hidden,true);});
-test('draw and duplicate delivery animate once; reroll uses new event/round ID',()=>{const f=fixture(),d=f.draw();f.packet(d);f.advance(1000);f.packet(d);f.advance(2100);
+test('draw and duplicate delivery animate once; reroll uses new event/round ID',()=>{const f=fixture(),d=f.draw();f.packet(d);f.advance(1000);f.packet(d);f.advance(4100);
  assert.equal(f.elements.winner.textContent,'Chosen');assert.equal(f.confetti(),65);f.packet(d);assert.equal(f.confetti(),65);
- f.packet(f.draw('reroll-2',{created_at:f.now()}));f.advance(3100);assert.equal(f.confetti(),130);assert.equal(f.requests(),0);});
-test('claimed winner hides four seconds after confirmation, awaiting/expired cannot undo it',()=>{const f=fixture(),d=f.draw();f.packet(d);f.advance(3100);
+ f.packet(f.draw('reroll-2',{created_at:f.now()}));f.advance(5100);assert.equal(f.confetti(),130);assert.equal(f.requests(),0);});
+test('claimed winner hides four seconds after confirmation, awaiting/expired cannot undo it',()=>{const f=fixture(),d=f.draw();f.packet(d);f.advance(5100);
  const claimed={...d,claim_status:'claimed',claimed_at:f.now()};f.packet(claimed);f.advance(3000);assert.equal(f.elements.result.hidden,false);f.packet(d);f.advance(1250);assert.equal(f.elements.result.hidden,true);});
-test('OBS reload restores a snapshot without another winner celebration, even if storage is blocked',()=>{const f=fixture(),d=f.draw();f.packet(d);f.advance(3100);
- const restored=fixture({storage:f.storage});restored.advance(3100);restored.packet(d);assert.equal(restored.elements.winner.textContent,'Chosen');assert.equal(restored.confetti(),0);
- const blocked=fixture({blocked:true});blocked.packet(blocked.draw());blocked.advance(3100);blocked.packet(blocked.draw('round-1'));assert.equal(blocked.confetti(),65);
- const blockedReload=fixture({blocked:true});blockedReload.advance(3100);blockedReload.packet(d,{replay:true});assert.equal(blockedReload.confetti(),0);assert.equal(blockedReload.elements.winner.textContent,'Chosen');});
-test('late first delivery spins locally but keeps original claim deadline; old packets cannot replace a reroll',()=>{const f=fixture(),d=f.draw();f.advance(20000);f.packet(d);assert.notEqual(f.elements.winner.textContent,'Chosen');f.advance(3100);assert.equal(f.elements.winner.textContent,'Chosen');
- assert.match(f.elements['claim-clock'].textContent,/70 mp/);const newer=f.draw('reroll-2');f.packet(newer);f.packet(d,{serverNow:'2026-10-14T09:00:00Z'});f.advance(3100);assert.equal(f.elements.winner.textContent,'Chosen');assert.equal(f.confetti(),130);});
+test('OBS reload restores a snapshot without another winner celebration, even if storage is blocked',()=>{const f=fixture(),d=f.draw();f.packet(d);f.advance(5100);
+ const restored=fixture({storage:f.storage});restored.advance(5100);restored.packet(d);assert.equal(restored.elements.winner.textContent,'Chosen');assert.equal(restored.confetti(),0);
+ const blocked=fixture({blocked:true});blocked.packet(blocked.draw());blocked.advance(5100);blocked.packet(blocked.draw('round-1'));assert.equal(blocked.confetti(),65);
+ const blockedReload=fixture({blocked:true});blockedReload.advance(5100);blockedReload.packet(d,{replay:true});assert.equal(blockedReload.confetti(),0);assert.equal(blockedReload.elements.winner.textContent,'Chosen');});
+test('late first delivery spins locally but keeps original claim deadline; old packets cannot replace a reroll',()=>{const f=fixture(),d=f.draw();f.advance(20000);f.packet(d);assert.notEqual(f.elements.winner.textContent,'Chosen');f.advance(5100);assert.equal(f.elements.winner.textContent,'Chosen');
+ assert.match(f.elements['claim-clock'].textContent,/68 mp/);const newer=f.draw('reroll-2');f.packet(newer);f.packet(d,{serverNow:'2026-10-14T09:00:00Z'});f.advance(5100);assert.equal(f.elements.winner.textContent,'Chosen');assert.equal(f.confetti(),130);});
 test('expiration is presentation only, OBS disconnect/idle clears and reconnection resumes',()=>{const f=fixture(),d=f.draw();f.packet(d);f.advance(94000);assert.match(f.elements['claim-clock'].textContent,/Nem jelentkezett/);
  f.listeners.get('obsExit')();assert.equal(f.elements.result.hidden,true);f.packet({...d,claim_status:'expired'});assert.equal(f.confetti(),65);f.packet(null);assert.equal(f.elements.result.hidden,true);assert.equal(f.requests(),0);});
 test('invalid event payload or protocol cannot start an animation',()=>{const f=fixture();f.packet(f.draw(),{protocol:'other'});f.packet({...f.draw(),winner:{display_name:'Fake',platform:'bad'}});assert.equal(f.elements.result.hidden,true);});
-test('late overlay test spins three seconds and hides after seven; replays never extend it',()=>{
+test('late overlay test spins five seconds and hides after nine; replays never extend it',()=>{
  const f=fixture(),d=f.draw('test-1',{test:true,claim_status:'test'});f.advance(20000);f.packet(d);
  assert.equal(f.elements.result.hidden,false);assert.notEqual(f.elements.winner.textContent,'Chosen');
- f.advance(3100);assert.equal(f.elements.winner.textContent,'Chosen');assert.equal(f.confetti(),65);
+ f.advance(5100);assert.equal(f.elements.winner.textContent,'Chosen');assert.equal(f.confetti(),65);
  f.packet(d,{replay:true});f.advance(3800);assert.equal(f.elements.result.hidden,false);
  f.advance(350);assert.equal(f.elements.result.hidden,true);f.packet(d,{replay:true});assert.equal(f.elements.result.hidden,true);
  f.advance(20000);f.packet(d,{replay:true});assert.equal(f.elements.result.hidden,true);assert.equal(f.confetti(),65);assert.equal(f.requests(),0);
  f.packet(f.draw('test-2',{test:true,claim_status:'test'}));assert.equal(f.elements.result.hidden,false);
+});
+test('a bot replay unseen by this browser still cycles names for five seconds on test and real draws',()=>{
+ for(const isTest of [true,false]){
+  const f=fixture(),d=f.draw('first-seen',{test:isTest,claim_status:isTest?'test':'awaiting',candidates:['Alpha','Beta','Gamma']});
+  f.advance(20000);f.packet(d,{replay:true});assert.equal(f.elements.winner.textContent,'Alpha');
+  f.advance(400);assert.equal(f.elements.winner.textContent,'Beta');f.packet(d,{replay:true});
+  f.advance(4590);assert.notEqual(f.elements.winner.textContent,'Chosen');
+  f.advance(20);assert.equal(f.elements.winner.textContent,'Chosen');assert.equal(f.confetti(),65);
+  assert.equal(f.requests(),0);
+ }
 });
