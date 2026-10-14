@@ -1,8 +1,8 @@
 # OBS overlay hangok
 
-A névpörgetéshez halk, 180 ms-onkénti kattogás tartozik. A konfetti indulásakor négy hangból álló, kb. egy másodperces győzelmi dallam szól. Tesztnél és valódi sorsolásnál ugyanaz a hangkezelés fut. Az ismételt esemény, a korábban megjelenített kör visszaállítása és a nyertes jelentkezése nem indít új dallamot.
+A névpörgetéshez mechanikus, rulettjellegű kattogás tartozik. A nevek és a hangok együtt lassulnak: az 5 másodperces pörgetés elején kb. 70 ms, a végén kb. 400 ms telik el a kattanások között. A konfetti indulásakor oktávokkal, mély hanggal és záró dúr akkorddal rétegzett, kb. 1,9 másodperces győzelmi fanfár szól. Tesztnél és valódi sorsolásnál ugyanaz a hangkezelés fut. Az ismételt esemény, a korábban megjelenített kör visszaállítása és a nyertes jelentkezése nem indít új dallamot.
 
-A hangok helyben, Web Audio oszcillátorokkal készülnek, nincsenek letöltött hangfájlok, új Worker-kérések vagy botmódosítások. Alapértelmezett relatív hangerő: 35%. A vizuális megjelenítés hanghiba esetén is működik.
+A hangok helyben, Web Audio oszcillátorokkal és egy újrafelhasznált, rövid szűrt zajmintával készülnek, nincsenek letöltött hangfájlok, új Worker-kérések vagy botmódosítások. Alapértelmezett relatív hangerő: 35%. A fanfár teltebb és erőteljesebb a korábbi változatnál. A vizuális megjelenítés hanghiba esetén is működik.
 
 ## OBS beállítás
 
@@ -17,4 +17,4 @@ Normál böngészős mintanézetben az automatikus hangindítást a böngésző 
 
 Források: [Web Audio útmutató](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API/Best_practices), [OBS Browser Source](https://obsproject.com/kb/browser-source).
 
-Ellenőrzés: 37 frontendteszt és Pages Functions build. A hangtesztek ellenőrzik a pörgetés kattogását, a dallam egyszeri indítását, a némítást, hangerőt, újratöltést, hanghiba melletti megjelenítést és a nulla overlay API-kérést. A tesztek szimulált AudioContextet használnak; a valódi hangzás és az OBS keverője helyi ellenőrzést igényel.
+Ellenőrzés: 38 frontendteszt és Pages Functions build. A hangtesztek ellenőrzik a kattogás lassulását, a rétegzett fanfár egyszeri indítását, a némítást, hangerőt, újratöltést, megszakításkor a hangok leállítását, hanghiba melletti megjelenítést és a nulla overlay API-kérést. A tesztek szimulált AudioContextet használnak; a valódi hangzás és az OBS keverője helyi ellenőrzést igényel.

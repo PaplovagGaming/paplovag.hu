@@ -8,24 +8,29 @@ function fixture({storage=new Map(),blocked=false,obs=true,audio=false,search=''
  const timers=new Map(),listeners=new Map(),elements=Object.fromEntries(['connection','result','prize','moderator','winner','claim-clock','overlay-heading'].map(id=>[id,{hidden:true,textContent:'',classList:{add(){},remove(){}}}]));
  class ClockDate extends Date{constructor(...args){super(...(args.length?args:[clock]));}static now(){return clock;}}
  function later(fn,ms,repeat){const id=++counter;timers.set(id,{fn,at:clock+ms,ms,repeat});return id;}
- const tones=[];
+ const tones=[],clicks=[];
+ let lastSound=null;
  class TestAudio {
-  constructor(){if(audioFails)throw Error('Audio unavailable');this.state='running';this.currentTime=0;this.destination={};}
-  createOscillator(){const tone={};tones.push(tone);return {frequency:{setValueAtTime(f){tone.frequency=f;}},connect(){},disconnect(){},start(at){tone.start=at;},stop(){this.onended?.();}};}
-  createGain(){return {gain:{setValueAtTime(){},linearRampToValueAtTime(v){tones.at(-1).volume=v;},exponentialRampToValueAtTime(){}},connect(){},disconnect(){}};}
+  constructor(){if(audioFails)throw Error('Audio unavailable');this.state='running';this.sampleRate=48000;this.destination={};}
+  get currentTime(){return (clock-Date.parse('2026-10-14T10:00:00Z'))/1000;}
+  createOscillator(){const tone={};tones.push(tone);lastSound=tone;return {set type(value){tone.type=value;},frequency:{setValueAtTime(f){tone.frequency=f;}},connect(){},disconnect(){},start(at){tone.start=at;},stop(){this.onended?.();}};}
+  createGain(){const sound=lastSound;return {gain:{set value(v){sound.volume=v;},setValueAtTime(){},linearRampToValueAtTime(v){sound.volume=v;},exponentialRampToValueAtTime(){}},connect(){},disconnect(){}};}
+  createBuffer(channels,length){return {getChannelData:()=>new Float32Array(length)};}
+  createBiquadFilter(){return {frequency:{value:0},Q:{value:0},connect(){},disconnect(){}};}
+  createBufferSource(){const click={};clicks.push(click);lastSound=click;let endTimer;return {connect(){},disconnect(){},start(){click.at=clock;endTimer=later(()=>this.onended?.(),35,false);},stop(){click.stopped=true;timers.delete(endTimer);this.onended?.();}};}
  }
  runInNewContext(source,{location:{search,hash:'#existing-read-only-link'},URLSearchParams,Date:ClockDate,Math,Set,
   window:{obsstudio:obs?{}:undefined,AudioContext:audio?TestAudio:undefined,addEventListener:(name,fn)=>listeners.set(name,fn)},
   sessionStorage:{getItem:k=>{if(blocked)throw Error();return storage.get(k);},setItem:(k,v)=>{if(blocked)throw Error();storage.set(k,v);}},
   document:{querySelector:s=>elements[s.slice(1)],createElement:()=>({style:{},remove(){}}),body:{append(){confetti++;}}},
   fetch:()=>{requests++;throw Error('Overlay must never call Cloudflare');},WebSocket:class{constructor(){throw Error('No control socket allowed in overlay');}},
-  setTimeout:(fn,ms)=>later(fn,ms,false),setInterval:(fn,ms)=>later(fn,ms,true),clearInterval:id=>timers.delete(id)});
+  setTimeout:(fn,ms)=>later(fn,ms,false),setInterval:(fn,ms)=>later(fn,ms,true),clearInterval:id=>timers.delete(id),clearTimeout:id=>timers.delete(id)});
  const draw=(id='round-1',extra={})=>({id,created_at:new ClockDate(clock).toISOString(),prize:'Prize',actor_name:'Mod',winner:{display_name:'Chosen',platform:'twitch'},
   reveal_at:new ClockDate(clock+3000).toISOString(),claim_deadline:new ClockDate(clock+93000).toISOString(),claim_status:'awaiting',candidates:['Other','Chosen'],...extra});
  function packet(d,extra={}){listeners.get('paplovagModOverlay')({detail:{protocol:'paplovag-overlay-v1',eventId:d?d.id+':'+d.claim_status:'idle',serverNow:new ClockDate(clock).toISOString(),draw:d,...extra}});}
  function advance(ms){const end=clock+ms;while(true){const next=[...timers.entries()].filter(([,t])=>t.at<=end).sort((a,b)=>a[1].at-b[1].at)[0];if(!next)break;
   const [id,t]=next;clock=t.at;if(t.repeat)t.at+=t.ms;else timers.delete(id);t.fn();}clock=end;}
- return {elements,storage,draw,packet,advance,now:()=>new ClockDate(clock).toISOString(),confetti:()=>confetti,requests:()=>requests,listeners,tones};
+ return {elements,storage,draw,packet,advance,now:()=>new ClockDate(clock).toISOString(),confetti:()=>confetti,requests:()=>requests,listeners,tones,clicks};
 }
 test('idle OBS overlay makes zero Cloudflare requests or socket connections',()=>{const f=fixture();f.advance(3600000);assert.equal(f.requests(),0);assert.equal(f.elements.result.hidden,true);});
 test('draw and duplicate delivery animate once; reroll uses new event/round ID',()=>{const f=fixture(),d=f.draw();f.packet(d);f.advance(1000);f.packet(d);f.advance(4100);
@@ -55,8 +60,8 @@ test('a bot replay unseen by this browser still cycles names for five seconds on
  for(const isTest of [true,false]){
   const f=fixture(),d=f.draw('first-seen',{test:isTest,claim_status:isTest?'test':'awaiting',candidates:['Alpha','Beta','Gamma']});
   f.advance(20000);f.packet(d,{replay:true});assert.equal(f.elements.winner.textContent,'Alpha');
-  f.advance(400);assert.equal(f.elements.winner.textContent,'Beta');f.packet(d,{replay:true});
-  f.advance(4590);assert.notEqual(f.elements.winner.textContent,'Chosen');
+  f.advance(100);assert.equal(f.elements.winner.textContent,'Beta');f.packet(d,{replay:true});
+  f.advance(4890);assert.notEqual(f.elements.winner.textContent,'Chosen');
   f.advance(20);assert.equal(f.elements.winner.textContent,'Chosen');assert.equal(f.confetti(),65);
   assert.equal(f.requests(),0);
  }
@@ -73,21 +78,29 @@ test('OBS vendor conversion preserves object names and the overlay cycles real a
   const f=fixture(),d=f.draw('obs-object-names',{test:isTest,claim_status:isTest?'test':'awaiting',
    candidates:[{display_name:'Alpha'},{display_name:'Beta'},{display_name:'Gamma'}]});
   const delivered=obsDataRoundtrip(d);f.packet(delivered);assert.equal(f.elements.winner.textContent,'Alpha');
-  f.advance(400);assert.equal(f.elements.winner.textContent,'Beta');f.advance(180);assert.equal(f.elements.winner.textContent,'Gamma');
-  f.advance(4430);assert.equal(f.elements.winner.textContent,'Chosen');assert.equal(f.confetti(),65);
+  f.advance(100);assert.equal(f.elements.winner.textContent,'Beta');f.advance(80);assert.equal(f.elements.winner.textContent,'Gamma');
+  f.advance(4830);assert.equal(f.elements.winner.textContent,'Chosen');assert.equal(f.confetti(),65);
   assert.equal(f.requests(),0);
  }
 });
 test('roll ticks and confetti fanfare play once; duplicates, claim updates and reload stay silent',()=>{
  const f=fixture({audio:true}),d=f.draw();f.packet(d);f.advance(1000);f.packet(d);f.advance(4100);
- assert.ok(f.tones.filter(t=>t.frequency===1100).length>20);
- assert.deepEqual(f.tones.filter(t=>t.frequency!==1100).map(t=>t.frequency),[523.25,659.25,783.99,1046.5]);
- const count=f.tones.length;f.packet(d);f.packet({...d,claim_status:'claimed',claimed_at:f.now()});f.advance(4500);assert.equal(f.tones.length,count);
- const restored=fixture({audio:true,storage:f.storage});restored.advance(10000);restored.packet(d,{replay:true});assert.equal(restored.tones.length,0);
+ assert.ok(f.clicks.length>20);
+ const gaps=f.clicks.slice(1).map((c,i)=>c.at-f.clicks[i].at);assert.ok(gaps.at(-1)>gaps[0]*4,'roulette clicks slow down toward the winner');
+ assert.deepEqual(f.tones.filter(t=>t.type==='sawtooth').map(t=>t.frequency),[261.625,329.625,391.995,523.25]);
+ assert.equal(f.tones.length,13);assert.ok(f.tones.some(t=>t.frequency===130.81));
+ const count=f.tones.length,clickCount=f.clicks.length;f.packet(d);f.packet({...d,claim_status:'claimed',claimed_at:f.now()});f.advance(4500);assert.equal(f.tones.length,count);assert.equal(f.clicks.length,clickCount);
+ const restored=fixture({audio:true,storage:f.storage});restored.advance(10000);restored.packet(d,{replay:true});assert.equal(restored.tones.length,0);assert.equal(restored.clicks.length,0);
  assert.equal(f.requests(),0);
 });
 test('sound mute, volume and unavailable audio never interfere with OBS presentation',()=>{
- for(const search of ['?sound=0','?volume=0']){const f=fixture({audio:true,search});f.packet(f.draw());f.advance(5100);assert.equal(f.tones.length,0);assert.equal(f.elements.winner.textContent,'Chosen');}
- const quiet=fixture({audio:true,search:'?volume=10'});quiet.packet(quiet.draw());assert.ok(Math.abs(quiet.tones[0].volume-0.012)<0.00001);
+ for(const search of ['?sound=0','?volume=0']){const f=fixture({audio:true,search});f.packet(f.draw());f.advance(5100);assert.equal(f.tones.length,0);assert.equal(f.clicks.length,0);assert.equal(f.elements.winner.textContent,'Chosen');}
+ const quiet=fixture({audio:true,search:'?volume=10'});quiet.packet(quiet.draw());assert.ok(Math.abs(quiet.clicks[0].volume-0.055)<0.00001);
  const unavailable=fixture({audio:true,audioFails:true});unavailable.packet(unavailable.draw());unavailable.advance(5100);assert.equal(unavailable.elements.winner.textContent,'Chosen');assert.equal(unavailable.confetti(),65);
+});
+test('clearing or disconnecting stops roulette clicks and prevents an old victory fanfare',()=>{
+ for(const clear of [f=>f.packet(null),f=>f.listeners.get('obsExit')()]){
+  const f=fixture({audio:true});f.packet(f.draw());f.advance(10);clear(f);const count=f.clicks.length;
+  assert.equal(f.clicks[0].stopped,true);f.advance(6000);assert.equal(f.clicks.length,count);assert.equal(f.tones.length,0);assert.equal(f.elements.result.hidden,true);
+ }
 });
