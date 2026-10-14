@@ -4,8 +4,8 @@ const demo=new URLSearchParams(location.search).get('demo')==='1';
 const $=id=>document.querySelector('#'+id);
 let currentDraw=null,clockOffset=0,lastServerTime=-Infinity,generation=0,rollingTimer=null,localRevealUntil=0,testHideAt=0;
 const serverTime=()=>Date.now()+clockOffset;
-let seen=new Set();
-try{seen=new Set(JSON.parse(sessionStorage.getItem('paplovag-overlay-seen-v1')||'[]'));}catch{}
+let seen=new Set(),storageAvailable=true;
+try{seen=new Set(JSON.parse(sessionStorage.getItem('paplovag-overlay-seen-v1')||'[]'));}catch{storageAvailable=false;}
 function remember(id){seen.add(id);if(seen.size>100)seen.delete(seen.values().next().value);try{sessionStorage.setItem('paplovag-overlay-seen-v1',JSON.stringify([...seen]));}catch{}}
 function status(value){$('connection').textContent=value;$('connection').hidden=!value;}
 function stop(){generation++;clearInterval(rollingTimer);rollingTimer=null;$('result').classList.remove('rolling');}
@@ -27,8 +27,8 @@ function reveal(d,replayed){stop();const version=generation;$('result').hidden=f
  $('overlay-heading').textContent=d.test?'OVERLAY TESZT – MINTANEVEK':'PAPLOVAG NYEREMÉNYJÁTÉK';$('moderator').textContent='';
  const originalRemaining=Date.parse(d.reveal_at)-serverTime();
  // A late first delivery still spins the names; it never extends the server claim deadline.
- const remaining=d.test?Math.max(0,Math.min(3000,replayed?originalRemaining:3000)):
-   !replayed&&d.claim_status==='awaiting'?Math.max(originalRemaining,Math.min(3000,Date.parse(d.claim_deadline)-serverTime())):originalRemaining;
+ const remaining=d.test?Math.max(0,Math.min(5000,replayed?originalRemaining:5000)):
+   !replayed&&d.claim_status==='awaiting'?Math.max(0,Math.min(5000,Date.parse(d.claim_deadline)-serverTime())):originalRemaining;
  localRevealUntil=serverTime()+Math.max(0,remaining);
  if(remaining>0){$('result').classList.add('rolling');const names=d.candidates?.length?d.candidates:['✦'];let i=0;$('winner').textContent=names[0];
    rollingTimer=setInterval(()=>{$('winner').textContent=names[i++%names.length];},180);
@@ -47,9 +47,11 @@ function receive(event){const packet=event.detail;if(packet?.protocol!=='paplova
  const changed=currentDraw?.id!==d?.id;currentDraw=d;
  // The server test TTL allows delivery across bot polls; it is not a viewer countdown.
  // Set the presentation deadline once per test ID, so replays cannot keep it visible.
- if(changed)testHideAt=d?.test?serverTime()+7000:0;
+ if(changed)testHideAt=d?.test?serverTime()+9000:0;
  if(!d||hidden(d)){stop();$('result').hidden=true;countdown();return;}
- if(changed){const replayed=packet.replay===true||seen.has(d.id);remember(d.id);reveal(d,replayed);}else countdown();
+ // A bot replay means it was sent before, not that this Browser Source displayed it.
+ // Prefer the browser's receipt history; when storage is unavailable retain the bot guard.
+ if(changed){const replayed=seen.has(d.id)||(!storageAvailable&&packet.replay===true);remember(d.id);reveal(d,replayed);}else countdown();
 }
 window.addEventListener('paplovagModOverlay',receive);
 window.addEventListener('obsExit',()=>{stop();$('result').hidden=true;status('OBS kapcsolat megszakadt.');});
