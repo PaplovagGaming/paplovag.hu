@@ -55,3 +55,20 @@ test('a bot replay unseen by this browser still cycles names for five seconds on
   assert.equal(f.requests(),0);
  }
 });
+// libobs obs_data_add_json_array keeps objects and discards primitive array items.
+function obsDataRoundtrip(value){
+ if(Array.isArray(value))return value.filter(v=>v&&typeof v==='object'&&!Array.isArray(v)).map(obsDataRoundtrip);
+ if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).map(([k,v])=>[k,obsDataRoundtrip(v)]));
+ return value;
+}
+test('OBS vendor conversion preserves object names and the overlay cycles real and test candidates',()=>{
+ assert.deepEqual(obsDataRoundtrip({candidates:['Alpha','Beta']}).candidates,[]);
+ for(const isTest of [true,false]){
+  const f=fixture(),d=f.draw('obs-object-names',{test:isTest,claim_status:isTest?'test':'awaiting',
+   candidates:[{display_name:'Alpha'},{display_name:'Beta'},{display_name:'Gamma'}]});
+  const delivered=obsDataRoundtrip(d);f.packet(delivered);assert.equal(f.elements.winner.textContent,'Alpha');
+  f.advance(400);assert.equal(f.elements.winner.textContent,'Beta');f.advance(180);assert.equal(f.elements.winner.textContent,'Gamma');
+  f.advance(4430);assert.equal(f.elements.winner.textContent,'Chosen');assert.equal(f.confetti(),65);
+  assert.equal(f.requests(),0);
+ }
+});
