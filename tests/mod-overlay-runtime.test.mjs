@@ -55,4 +55,3 @@ test('a bot replay unseen by this browser still cycles names for five seconds on
   assert.equal(f.requests(),0);
  }
 });
-
