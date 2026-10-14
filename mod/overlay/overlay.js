@@ -2,7 +2,7 @@
 // This page opens no socket and makes no API requests. No OBS/API credential is needed here.
 const demo=new URLSearchParams(location.search).get('demo')==='1';
 const $=id=>document.querySelector('#'+id);
-let currentDraw=null,clockOffset=0,lastServerTime=-Infinity,generation=0,rollingTimer=null,localRevealUntil=0;
+let currentDraw=null,clockOffset=0,lastServerTime=-Infinity,generation=0,rollingTimer=null,localRevealUntil=0,testHideAt=0;
 const serverTime=()=>Date.now()+clockOffset;
 let seen=new Set();
 try{seen=new Set(JSON.parse(sessionStorage.getItem('paplovag-overlay-seen-v1')||'[]'));}catch{}
@@ -11,7 +11,7 @@ function status(value){$('connection').textContent=value;$('connection').hidden=
 function stop(){generation++;clearInterval(rollingTimer);rollingTimer=null;$('result').classList.remove('rolling');}
 function hidden(d){if(!d)return true;const deadline=Date.parse(d.claim_deadline),claimed=Date.parse(d.claimed_at);
  return d.claim_status==='claimed'?Number.isFinite(claimed)&&serverTime()>=claimed+4000:
-   d.test&&Number.isFinite(deadline)&&serverTime()>deadline;
+   d.test&&((testHideAt>0&&serverTime()>=testHideAt)||(Number.isFinite(deadline)&&serverTime()>deadline));
 }
 function countdown(){const d=currentDraw;if(hidden(d)){$('result').hidden=true;if(rollingTimer!==null)stop();}
  if(!d){$('claim-clock').hidden=true;return;}$('claim-clock').hidden=false;
@@ -27,7 +27,8 @@ function reveal(d,replayed){stop();const version=generation;$('result').hidden=f
  $('overlay-heading').textContent=d.test?'OVERLAY TESZT – MINTANEVEK':'PAPLOVAG NYEREMÉNYJÁTÉK';$('moderator').textContent='';
  const originalRemaining=Date.parse(d.reveal_at)-serverTime();
  // A late first delivery still spins the names; it never extends the server claim deadline.
- const remaining=!replayed&&d.claim_status==='awaiting'?Math.max(originalRemaining,Math.min(3000,Date.parse(d.claim_deadline)-serverTime())):originalRemaining;
+ const remaining=d.test?Math.max(0,Math.min(3000,replayed?originalRemaining:3000)):
+   !replayed&&d.claim_status==='awaiting'?Math.max(originalRemaining,Math.min(3000,Date.parse(d.claim_deadline)-serverTime())):originalRemaining;
  localRevealUntil=serverTime()+Math.max(0,remaining);
  if(remaining>0){$('result').classList.add('rolling');const names=d.candidates?.length?d.candidates:['✦'];let i=0;$('winner').textContent=names[0];
    rollingTimer=setInterval(()=>{$('winner').textContent=names[i++%names.length];},180);
@@ -44,6 +45,9 @@ function receive(event){const packet=event.detail;if(packet?.protocol!=='paplova
  if(d?.id===currentDraw?.id&&currentDraw&&({awaiting:0,expired:1,claimed:2}[d.claim_status]??0)<({awaiting:0,expired:1,claimed:2}[currentDraw.claim_status]??0))return;
  lastServerTime=stamp;clockOffset=stamp-Date.now();status('');
  const changed=currentDraw?.id!==d?.id;currentDraw=d;
+ // The server test TTL allows delivery across bot polls; it is not a viewer countdown.
+ // Set the presentation deadline once per test ID, so replays cannot keep it visible.
+ if(changed)testHideAt=d?.test?serverTime()+7000:0;
  if(!d||hidden(d)){stop();$('result').hidden=true;countdown();return;}
  if(changed){const replayed=packet.replay===true||seen.has(d.id);remember(d.id);reveal(d,replayed);}else countdown();
 }
