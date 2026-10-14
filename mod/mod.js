@@ -309,6 +309,7 @@ function render() {
           archived: "Archiválva",
           purchase_committed: "Jegyvásárlás visszaigazolva",
           message_ack: "Chatüzenet visszaigazolva",
+          overlay_ack: "OBS-eseményt a bot átvette",
           stream_update: "Stream adatok módosítása",
         }[e.action] || e.action,
       ),
