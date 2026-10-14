@@ -2,66 +2,37 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
-const script=readFileSync(new URL('../mod/overlay/overlay.js',import.meta.url),'utf8');
-async function overlay({hash='#synthetic-overlay-token',blocked=true,status=200,draw={},response}={}) {
- const elements=Object.fromEntries(['connection','result','prize','moderator','winner','claim-clock','overlay-heading'].map(id=>[id,{hidden:true,textContent:'',classList:{add(){},remove(){}}}]));
- const requests=[];
- let clock=Date.now();const intervals=[];
- class ClockDate extends Date {constructor(...args){super(...(args.length?args:[clock]));}static now(){return clock;}}
- const now=new Date(clock).toISOString();
- runInNewContext(script,{
-  location:{hash,search:'',pathname:'/mod/overlay/'},history:{replaceState(){throw new Error('Must not strip OBS URL credentials');}},
-  sessionStorage:{getItem(){if(blocked)throw new Error('Storage blocked');return null;},setItem(){if(blocked)throw new Error('Storage blocked');}},
-  document:{querySelector:s=>elements[s.slice(1)],createElement:()=>({style:{},remove(){}}),body:{append(){}}},
-  fetch:async(url,options)=>{requests.push({url,options});if(response)return response(clock);return{status,ok:status===200,json:async()=>({serverNow:now,draw:{id:'real-api-round',prize:'Synthetic prize',actor_name:'Test mod',winner:{display_name:'Winner',platform:'twitch'},reveal_at:now,claim_deadline:new Date(clock+90000).toISOString(),claim_status:'awaiting',candidates:['Winner','Other'],...draw}})};},
-  setInterval:(fn,ms)=>{intervals.push({fn,ms});return intervals.length;},clearInterval(){},setTimeout:fn=>queueMicrotask(fn),URLSearchParams,Date:ClockDate,Math,Promise,
- });
- await new Promise(resolve=>setImmediate(resolve));
- return {elements,requests,advance:ms=>{clock+=ms;intervals.filter(i=>i.ms===250).forEach(i=>i.fn());},pump:async(ms=0)=>{clock+=ms;intervals.filter(i=>i.ms===1000).forEach(i=>i.fn());await new Promise(resolve=>setImmediate(resolve));}};
+const source=readFileSync(new URL('../mod/overlay/overlay.js',import.meta.url),'utf8');
+function fixture({storage=new Map(),blocked=false,obs=true}={}){
+ let clock=Date.parse('2026-10-14T10:00:00Z'),counter=0,confetti=0,requests=0;
+ const timers=new Map(),listeners=new Map(),elements=Object.fromEntries(['connection','result','prize','moderator','winner','claim-clock','overlay-heading'].map(id=>[id,{hidden:true,textContent:'',classList:{add(){},remove(){}}}]));
+ class ClockDate extends Date{constructor(...args){super(...(args.length?args:[clock]));}static now(){return clock;}}
+ function later(fn,ms,repeat){const id=++counter;timers.set(id,{fn,at:clock+ms,ms,repeat});return id;}
+ runInNewContext(source,{location:{search:'',hash:'#existing-read-only-link'},URLSearchParams,Date:ClockDate,Math,Set,
+  window:{obsstudio:obs?{}:undefined,addEventListener:(name,fn)=>listeners.set(name,fn)},
+  sessionStorage:{getItem:k=>{if(blocked)throw Error();return storage.get(k);},setItem:(k,v)=>{if(blocked)throw Error();storage.set(k,v);}},
+  document:{querySelector:s=>elements[s.slice(1)],createElement:()=>({style:{},remove(){}}),body:{append(){confetti++;}}},
+  fetch:()=>{requests++;throw Error('Overlay must never call Cloudflare');},WebSocket:class{constructor(){throw Error('No control socket allowed in overlay');}},
+  setTimeout:(fn,ms)=>later(fn,ms,false),setInterval:(fn,ms)=>later(fn,ms,true),clearInterval:id=>timers.delete(id)});
+ const draw=(id='round-1',extra={})=>({id,created_at:new ClockDate(clock).toISOString(),prize:'Prize',actor_name:'Mod',winner:{display_name:'Chosen',platform:'twitch'},
+  reveal_at:new ClockDate(clock+3000).toISOString(),claim_deadline:new ClockDate(clock+93000).toISOString(),claim_status:'awaiting',candidates:['Other','Chosen'],...extra});
+ function packet(d,extra={}){listeners.get('paplovagModOverlay')({detail:{protocol:'paplovag-overlay-v1',eventId:d?d.id+':'+d.claim_status:'idle',serverNow:new ClockDate(clock).toISOString(),draw:d,...extra}});}
+ function advance(ms){const end=clock+ms;while(true){const next=[...timers.entries()].filter(([,t])=>t.at<=end).sort((a,b)=>a[1].at-b[1].at)[0];if(!next)break;
+  const [id,t]=next;clock=t.at;if(t.repeat)t.at+=t.ms;else timers.delete(id);t.fn();}clock=end;}
+ return {elements,storage,draw,packet,advance,now:()=>new ClockDate(clock).toISOString(),confetti:()=>confetti,requests:()=>requests,listeners};
 }
-test('real API round renders when OBS storage is blocked',async()=>{
- const {elements,requests}=await overlay();
- assert.equal(requests[0].options.headers.authorization,'Bearer synthetic-overlay-token');
- assert.equal(elements.result.hidden,false);assert.equal(elements.winner.textContent,'Winner');
- assert.match(elements['claim-clock'].textContent,/\d+ mp/);assert.equal(elements.connection.hidden,true);
-});
-test('missing credentials and revoked URLs produce visible actionable messages',async()=>{
- const missing=await overlay({hash:''});assert.equal(missing.requests.length,0);assert.match(missing.elements.connection.textContent,/Nincs overlay-cím/);
- const revoked=await overlay({status:401});assert.equal(revoked.elements.connection.hidden,false);assert.match(revoked.elements.connection.textContent,/érvénytelen/);
-});
-test('claimed winner hides four seconds after server confirmation and stays hidden on reload',async()=>{
- const confirmedAt=new Date().toISOString();
- const result=await overlay({draw:{claim_status:'claimed',claimed_at:confirmedAt}});
- assert.equal(result.elements.result.hidden,false);
- result.advance(3000);assert.equal(result.elements.result.hidden,false);
- result.advance(1100);assert.equal(result.elements.result.hidden,true);
- const reloaded=await overlay({draw:{claim_status:'claimed',claimed_at:new Date(Date.now()-5000).toISOString()}});
- assert.equal(reloaded.elements.result.hidden,true);assert.equal(reloaded.elements.winner.textContent,'');
- const waiting=await overlay();waiting.advance(80000);assert.equal(waiting.elements.result.hidden,false,'unclaimed winner retains claim countdown');
-});
-
-test('idle polling is halved and failures back off with recovery',async()=>{
- let healthy=true;
- const f=await overlay({response:clock=>({status:healthy?200:503,ok:healthy,json:async()=>({serverNow:new Date(clock).toISOString(),draw:null})})});
- await f.pump(1000);assert.equal(f.requests.length,1);
- await f.pump(1000);assert.equal(f.requests.length,2);
- healthy=false;await f.pump(2000);assert.equal(f.requests.length,3);
- await f.pump(4000);assert.equal(f.requests.length,3);
- await f.pump(1000);assert.equal(f.requests.length,4);
- await f.pump(9000);assert.equal(f.requests.length,4);
- healthy=true;await f.pump(1000);assert.equal(f.requests.length,5);assert.equal(f.elements.connection.hidden,true);
- await f.pump(1000);assert.equal(f.requests.length,5);
- await f.pump(1000);assert.equal(f.requests.length,6);
- healthy=false;await f.pump(2000);await f.pump(5000);assert.equal(f.requests.length,8,'successful response resets error delay');
-});
-
-test('slow requests never overlap and revoked links retry only once a minute',async()=>{
- let complete;
- const slow=await overlay({response:()=>new Promise(resolve=>{complete=resolve;})});
- await slow.pump(10000);assert.equal(slow.requests.length,1);
- complete({status:200,ok:true,json:async()=>({serverNow:new Date().toISOString(),draw:null})});
- await new Promise(resolve=>setImmediate(resolve));
- await slow.pump(2000);assert.equal(slow.requests.length,2);
- const revoked=await overlay({status:401});await revoked.pump(59000);assert.equal(revoked.requests.length,1);
- await revoked.pump(1000);assert.equal(revoked.requests.length,2);
-});
+test('idle OBS overlay makes zero Cloudflare requests or socket connections',()=>{const f=fixture();f.advance(3600000);assert.equal(f.requests(),0);assert.equal(f.elements.result.hidden,true);});
+test('draw and duplicate delivery animate once; reroll uses new event/round ID',()=>{const f=fixture(),d=f.draw();f.packet(d);f.advance(1000);f.packet(d);f.advance(2100);
+ assert.equal(f.elements.winner.textContent,'Chosen');assert.equal(f.confetti(),65);f.packet(d);assert.equal(f.confetti(),65);
+ f.packet(f.draw('reroll-2',{created_at:f.now()}));f.advance(3100);assert.equal(f.confetti(),130);assert.equal(f.requests(),0);});
+test('claimed winner hides four seconds after confirmation, awaiting/expired cannot undo it',()=>{const f=fixture(),d=f.draw();f.packet(d);f.advance(3100);
+ const claimed={...d,claim_status:'claimed',claimed_at:f.now()};f.packet(claimed);f.advance(3000);assert.equal(f.elements.result.hidden,false);f.packet(d);f.advance(1250);assert.equal(f.elements.result.hidden,true);});
+test('OBS reload restores a snapshot without another winner celebration, even if storage is blocked',()=>{const f=fixture(),d=f.draw();f.packet(d);f.advance(3100);
+ const restored=fixture({storage:f.storage});restored.advance(3100);restored.packet(d);assert.equal(restored.elements.winner.textContent,'Chosen');assert.equal(restored.confetti(),0);
+ const blocked=fixture({blocked:true});blocked.packet(blocked.draw());blocked.advance(3100);blocked.packet(blocked.draw('round-1'));assert.equal(blocked.confetti(),65);
+ const blockedReload=fixture({blocked:true});blockedReload.advance(3100);blockedReload.packet(d,{replay:true});assert.equal(blockedReload.confetti(),0);assert.equal(blockedReload.elements.winner.textContent,'Chosen');});
+test('late first delivery spins locally but keeps original claim deadline; old packets cannot replace a reroll',()=>{const f=fixture(),d=f.draw();f.advance(20000);f.packet(d);assert.notEqual(f.elements.winner.textContent,'Chosen');f.advance(3100);assert.equal(f.elements.winner.textContent,'Chosen');
+ assert.match(f.elements['claim-clock'].textContent,/70 mp/);const newer=f.draw('reroll-2');f.packet(newer);f.packet(d,{serverNow:'2026-10-14T09:00:00Z'});f.advance(3100);assert.equal(f.elements.winner.textContent,'Chosen');assert.equal(f.confetti(),130);});
+test('expiration is presentation only, OBS disconnect/idle clears and reconnection resumes',()=>{const f=fixture(),d=f.draw();f.packet(d);f.advance(94000);assert.match(f.elements['claim-clock'].textContent,/Nem jelentkezett/);
+ f.listeners.get('obsExit')();assert.equal(f.elements.result.hidden,true);f.packet({...d,claim_status:'expired'});assert.equal(f.confetti(),65);f.packet(null);assert.equal(f.elements.result.hidden,true);assert.equal(f.requests(),0);});
+test('invalid event payload or protocol cannot start an animation',()=>{const f=fixture();f.packet(f.draw(),{protocol:'other'});f.packet({...f.draw(),winner:{display_name:'Fake',platform:'bad'}});assert.equal(f.elements.result.hidden,true);});
