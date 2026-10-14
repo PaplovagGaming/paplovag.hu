@@ -1,8 +1,8 @@
 # OBS overlay hangok
 
-A névpörgetéshez mechanikus, rulettjellegű kattogás tartozik. A nevek és a hangok együtt lassulnak: az 5 másodperces pörgetés elején kb. 70 ms, a végén kb. 400 ms telik el a kattanások között. A konfetti indulásakor oktávokkal, mély hanggal és záró dúr akkorddal rétegzett, kb. 1,9 másodperces győzelmi fanfár szól. Tesztnél és valódi sorsolásnál ugyanaz a hangkezelés fut. Az ismételt esemény, a korábban megjelenített kör visszaállítása és a nyertes jelentkezése nem indít új dallamot.
+A névpörgetéshez mechanikus, rulettjellegű kattogás tartozik. A nevek és a hangok együtt lassulnak: az 5 másodperces pörgetés elején kb. 70 ms, a végén kb. 400 ms telik el a kattanások között. A konfetti indulásakor a felhasználó által választott [winning-sfx.mp3](https://www.myinstants.com/media/sounds/winning-sfx.mp3) szól, kb. 1,5 másodpercig. Tesztnél és valódi sorsolásnál ugyanaz a hangkezelés fut. Az ismételt esemény, a korábban megjelenített kör visszaállítása és a nyertes jelentkezése nem indít új lejátszást.
 
-A hangok helyben, Web Audio oszcillátorokkal és egy újrafelhasznált, rövid szűrt zajmintával készülnek, nincsenek letöltött hangfájlok, új Worker-kérések vagy botmódosítások. Alapértelmezett relatív hangerő: 35%. A fanfár teltebb és erőteljesebb a korábbi változatnál. A vizuális megjelenítés hanghiba esetén is működik.
+A kattogás helyben, egy újrafelhasznált rövid szűrt zajmintából készül. A választott MP3 saját statikus fájlként kerül kiszolgálásra: `/mod/overlay/sounds/winning-sfx.mp3` (24 587 bájt). Első pörgetéskor előtöltjük, későbbi sorsoláskor ugyanazt a lejátszót használjuk újra. Nincs Myinstants-hívás lejátszás közben, új API-polling vagy botmódosítás. A betöltés egy kis statikus erőforráskérés, a további lejátszások nem kérnek új API-adatot. Alapértelmezett relatív hangerő: 35%. A vizuális megjelenítés hanghiba esetén is működik.
 
 ## OBS beállítás
 
@@ -17,4 +17,4 @@ Normál böngészős mintanézetben az automatikus hangindítást a böngésző 
 
 Források: [Web Audio útmutató](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API/Best_practices), [OBS Browser Source](https://obsproject.com/kb/browser-source).
 
-Ellenőrzés: 38 frontendteszt és Pages Functions build. A hangtesztek ellenőrzik a kattogás lassulását, a rétegzett fanfár egyszeri indítását, a némítást, hangerőt, újratöltést, megszakításkor a hangok leállítását, hanghiba melletti megjelenítést és a nulla overlay API-kérést. A tesztek szimulált AudioContextet használnak; a valódi hangzás és az OBS keverője helyi ellenőrzést igényel.
+Ellenőrzés: 39 frontendteszt és Pages Functions build. A hangtesztek ellenőrzik a kattogás lassulását, az MP3 előtöltését és egyszeri indítását, a némítást, hangerőt, újratöltést, megszakításkor a hangok leállítását, lejátszási hiba melletti megjelenítést és a nulla overlay API-kérést. Az MP3 MPEG-kereteinek ellenőrzése szerint a fájl kb. 1,54 másodperces. A tesztek szimulált AudioContextet és Audio lejátszót használnak; az OBS hangkeverője helyi ellenőrzést igényel.

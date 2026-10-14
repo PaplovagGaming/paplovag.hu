@@ -3,7 +3,7 @@
 const demo=new URLSearchParams(location.search).get('demo')==='1';
 const soundParams=new URLSearchParams(location.search),requestedVolume=Number(soundParams.get('volume'));
 const soundVolume=soundParams.get('sound')==='0'?0:soundParams.has('volume')&&Number.isFinite(requestedVolume)?Math.max(0,Math.min(100,requestedVolume))/100:0.35;
-let audioContext=null,rouletteClick=null;
+let audioContext=null,rouletteClick=null,victoryAudio=null;
 const playingSounds=new Set();
 function audio(){
  if(!soundVolume)return null;
@@ -13,14 +13,9 @@ function audio(){
    return audioContext.state==='running'?audioContext:null;
  }catch{return null;}
 }
-function tone(ctx,frequency,delay,duration,level,type){
- try{const oscillator=ctx.createOscillator(),gain=ctx.createGain(),start=ctx.currentTime+delay;
-   oscillator.type=type;oscillator.frequency.setValueAtTime(frequency,start);
-   gain.gain.setValueAtTime(0,start);gain.gain.linearRampToValueAtTime(level*soundVolume,start+0.005);gain.gain.exponentialRampToValueAtTime(0.0001,start+duration);
-   oscillator.connect(gain);gain.connect(ctx.destination);playingSounds.add(oscillator);
-   oscillator.onended=()=>{playingSounds.delete(oscillator);oscillator.disconnect();gain.disconnect();};
-   oscillator.start(start);oscillator.stop(start+duration+0.01);
- }catch{}
+function prepareVictorySound(){
+ if(!soundVolume||!window.Audio)return null;
+ try{if(!victoryAudio){victoryAudio=new window.Audio('/mod/overlay/sounds/winning-sfx.mp3');victoryAudio.preload='auto';victoryAudio.volume=soundVolume;victoryAudio.load();}return victoryAudio;}catch{return null;}
 }
 function rollSound(){const ctx=audio();if(!ctx)return;
  try{
@@ -33,15 +28,10 @@ function rollSound(){const ctx=audio();if(!ctx)return;
    source.onended=()=>{playingSounds.delete(source);source.disconnect();filter.disconnect();gain.disconnect();};source.start();
  }catch{}
 }
-function winSound(){const ctx=audio();if(!ctx)return;
- // Brass-like octave layers lead into a fuller major chord; no downloaded audio.
- [523.25,659.25,783.99,1046.5].forEach((frequency,i)=>{
-   tone(ctx,frequency,i*0.17,0.23,0.25,'triangle');tone(ctx,frequency/2,i*0.17,0.23,0.14,'sawtooth');
- });
- [261.63,329.63,392,523.25].forEach(frequency=>tone(ctx,frequency,0.7,1.1,0.17,'triangle'));
- tone(ctx,130.81,0.7,1.2,0.22,'sine');
+function winSound(){const clip=prepareVictorySound();if(!clip)return;try{clip.currentTime=0;clip.play()?.catch(()=>{});}catch{}}
+function stopSounds(){for(const oscillator of playingSounds){try{oscillator.stop();}catch{}}playingSounds.clear();
+ if(victoryAudio)try{victoryAudio.pause();victoryAudio.currentTime=0;}catch{}
 }
-function stopSounds(){for(const oscillator of playingSounds){try{oscillator.stop();}catch{}}playingSounds.clear();}
 // Normal-browser previews may require a gesture; OBS supplies its own audio policy.
 window.addEventListener('pointerdown',audio);
 const $=id=>document.querySelector('#'+id);
@@ -68,6 +58,7 @@ function winner(d,confetti){$('winner').textContent=d.winner.display_name;$('mod
    piece.style.background=['#b18dff','#e4cbff','#f8d477','#82dab5'][i%4];piece.style.animationDelay=`${Math.random()}s`;document.body.append(piece);setTimeout(()=>piece.remove(),4500);}
 }
 function reveal(d,replayed){stop();const version=generation;$('result').hidden=false;$('prize').textContent=d.prize;
+ if(!replayed)prepareVictorySound(); // Fetch the small static clip once, during the roll.
  $('overlay-heading').textContent=d.test?'OVERLAY TESZT – MINTANEVEK':'PAPLOVAG NYEREMÉNYJÁTÉK';$('moderator').textContent='';
  const originalRemaining=Date.parse(d.reveal_at)-serverTime();
  // A late first delivery still spins the names; it never extends the server claim deadline.
