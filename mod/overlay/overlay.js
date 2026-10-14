@@ -1,112 +1,57 @@
-let token = location.hash.slice(1);
-// OBS may restrict browser storage. The configured URL remains the source of truth.
-try {
-  if(!token)token=sessionStorage.getItem("paplovag-overlay-token") || "";
-  if(token)sessionStorage.setItem("paplovag-overlay-token",token);
-} catch { /* Storage is optional; a full overlay URL works without it. */ }
-const demo = new URLSearchParams(location.search).get("demo") === "1";
-let lastId = "",
-  playing = false;
-let currentDraw=null,clockOffset=0;
-let fetching=false,nextPollAt=0,retryDelay=5000;
+// OBS dispatches this CustomEvent through its existing authenticated obs-websocket connection.
+// This page opens no socket and makes no API requests. No OBS/API credential is needed here.
+const demo=new URLSearchParams(location.search).get('demo')==='1';
+const $=id=>document.querySelector('#'+id);
+let currentDraw=null,clockOffset=0,lastServerTime=-Infinity,generation=0,rollingTimer=null,localRevealUntil=0;
 const serverTime=()=>Date.now()+clockOffset;
-const claimHidden=d=>d?.claim_status==='claimed'&&Number.isFinite(Date.parse(d.claimed_at))&&serverTime()>=Date.parse(d.claimed_at)+4000;
-function countdown() {
-  const d=currentDraw,el=document.querySelector("#claim-clock");
-  if(claimHidden(d))document.querySelector('#result').hidden=true;
-  if(!d||!d.claim_deadline){el.hidden=true;return;}
-  el.hidden=false;
-  const left=Math.max(0,Math.ceil((Date.parse(d.claim_deadline)-serverTime())/1000));
-  el.textContent=d.test?(serverTime()<Date.parse(d.reveal_at)?"✦ Tesztpörgetés…":`${left} mp · TESZT – nincs valódi nyertes`):d.game_status==="archived"?"Nyereményjáték lezárva":d.claim_status==="claimed"?"✓ A nyertes jelentkezett":serverTime()<Date.parse(d.reveal_at)?"✦ Pörgetés…":left===0?"Nem jelentkezett – újrasorsolás következhet":`${left} mp · Írj bármit a ${d.winner.platform} chatbe!`;
+let seen=new Set();
+try{seen=new Set(JSON.parse(sessionStorage.getItem('paplovag-overlay-seen-v1')||'[]'));}catch{}
+function remember(id){seen.add(id);if(seen.size>100)seen.delete(seen.values().next().value);try{sessionStorage.setItem('paplovag-overlay-seen-v1',JSON.stringify([...seen]));}catch{}}
+function status(value){$('connection').textContent=value;$('connection').hidden=!value;}
+function stop(){generation++;clearInterval(rollingTimer);rollingTimer=null;$('result').classList.remove('rolling');}
+function hidden(d){if(!d)return true;const deadline=Date.parse(d.claim_deadline),claimed=Date.parse(d.claimed_at);
+ return d.claim_status==='claimed'?Number.isFinite(claimed)&&serverTime()>=claimed+4000:
+   d.test&&Number.isFinite(deadline)&&serverTime()>deadline;
 }
-function status(text) {
-  const el = document.querySelector("#connection");
-  el.textContent = text;
-  el.hidden = !text;
+function countdown(){const d=currentDraw;if(hidden(d)){$('result').hidden=true;if(rollingTimer!==null)stop();}
+ if(!d){$('claim-clock').hidden=true;return;}$('claim-clock').hidden=false;
+ const left=Math.max(0,Math.ceil((Date.parse(d.claim_deadline)-serverTime())/1000));
+ $('claim-clock').textContent=d.test?'TESZT – nincs valódi nyertes':d.claim_status==='claimed'?'✓ A nyertes jelentkezett':
+   serverTime()<localRevealUntil?'✦ Pörgetés…':left===0?'Nem jelentkezett – újrasorsolás következhet':`${left} mp · Írj bármit a ${d.winner.platform} chatbe!`;
 }
-async function reveal(draw) {
-  playing = true;
-  const result = document.querySelector("#result");
-  result.hidden = false;
-  const heading=document.querySelector('#overlay-heading');
-  if(heading)heading.textContent=draw.test?'OVERLAY TESZT – MINTANEVEK':'PAPLOVAG NYEREMÉNYJÁTÉK';
-  result.classList.add("rolling");
-  document.querySelector("#prize").textContent = draw.prize;
-  document.querySelector("#moderator").textContent = "";
-  const names = draw.candidates?.length ? draw.candidates : ["✦", "A következő szerencsés…", "✦"];
-  let i = 0;
-  const interval = setInterval(
-    () =>
-      (document.querySelector("#winner").textContent =
-        names[i++ % names.length]),
-    180,
-  );
-  await new Promise((r) => setTimeout(r, Math.max(0,Date.parse(draw.reveal_at || new Date(serverTime()+3000).toISOString())-serverTime())));
-  clearInterval(interval);
-  result.classList.remove("rolling");
-  document.querySelector("#winner").textContent = draw.winner.display_name;
-  document.querySelector("#moderator").textContent =
-    `${draw.winner.platform} · Sorsolta: ${draw.actor_name}`;
-  for (let i = 0; i < 65; i++) {
-    const piece = document.createElement("i");
-    piece.className = "confetti";
-    piece.style.left = `${Math.random() * 100}%`;
-    piece.style.background = ["#b18dff", "#e4cbff", "#f8d477", "#82dab5"][
-      i % 4
-    ];
-    piece.style.animationDelay = `${Math.random()}s`;
-    document.body.append(piece);
-    setTimeout(() => piece.remove(), 4500);
-  }
-  playing = false;
-  countdown();
+function winner(d,confetti){$('winner').textContent=d.winner.display_name;$('moderator').textContent=`${d.winner.platform} · Sorsolta: ${d.actor_name}`;
+ if(confetti)for(let i=0;i<65;i++){const piece=document.createElement('i');piece.className='confetti';piece.style.left=`${Math.random()*100}%`;
+   piece.style.background=['#b18dff','#e4cbff','#f8d477','#82dab5'][i%4];piece.style.animationDelay=`${Math.random()}s`;document.body.append(piece);setTimeout(()=>piece.remove(),4500);}
 }
-async function poll() {
-  if (playing || fetching || Date.now()<nextPollAt) return;
-  if (demo) {
-    if (!lastId) {
-      lastId = "demo";
-      currentDraw={
-        test:true,
-        id:"demo",reveal_at:new Date(Date.now()+3000).toISOString(),claim_deadline:new Date(Date.now()+93000).toISOString(),claim_status:"awaiting",
-        candidates:["TavernaLovag","Paplovag","GarasVadasz","StreamLovag"],
-        prize: "Steam játékkulcs",
-        winner: { display_name: "TavernaLovag", platform: "twitch" },
-        actor_name: "Paplovag MOD",
-      };reveal(currentDraw);
-    }
-    return;
-  }
-  if (!token) {
-    status("Nincs overlay-cím. Készíts újat a MOD Centerben.");
-    return;
-  }
-  try {
-    fetching=true;nextPollAt=Date.now()+1000;
-    const r = await fetch("/api/mod/overlay", {
-      headers: { authorization: `Bearer ${token}` },
-      cache: "no-store",
-      signal:typeof AbortSignal!=='undefined'&&AbortSignal.timeout?AbortSignal.timeout(8000):undefined,
-    });
-    if (r.status===401) {nextPollAt=Date.now()+60000;status("Az overlay címe érvénytelen vagy lecserélték. Másold be a MOD Centerben generált teljes címet az OBS-be.");return;}
-    if (!r.ok) throw new Error();
-    const { draw,serverNow } = await r.json();
-    clockOffset=Date.parse(serverNow)-Date.now();currentDraw=draw;retryDelay=5000;
-    status("");
-    if(!draw){nextPollAt=Date.now()+2000;document.querySelector('#result').hidden=true;lastId='';countdown();return;}
-    if(claimHidden(draw)){nextPollAt=Date.now()+2000;document.querySelector('#result').hidden=true;lastId=draw.id;countdown();return;}
-    if (draw && draw.id !== lastId) {
-      lastId = draw.id;
-      reveal(draw);
-    }
-    countdown();
-  } catch {
-    nextPollAt=Date.now()+retryDelay;retryDelay=Math.min(60000,retryDelay*2);
-    status("Az overlay kapcsolata megszakadt. Újrapróbálás…");
-  } finally {
-    fetching=false;
-  }
+function reveal(d,replayed){stop();const version=generation;$('result').hidden=false;$('prize').textContent=d.prize;
+ $('overlay-heading').textContent=d.test?'OVERLAY TESZT – MINTANEVEK':'PAPLOVAG NYEREMÉNYJÁTÉK';$('moderator').textContent='';
+ const originalRemaining=Date.parse(d.reveal_at)-serverTime();
+ // A late first delivery still spins the names; it never extends the server claim deadline.
+ const remaining=!replayed&&d.claim_status==='awaiting'?Math.max(originalRemaining,Math.min(3000,Date.parse(d.claim_deadline)-serverTime())):originalRemaining;
+ localRevealUntil=serverTime()+Math.max(0,remaining);
+ if(remaining>0){$('result').classList.add('rolling');const names=d.candidates?.length?d.candidates:['✦'];let i=0;$('winner').textContent=names[0];
+   rollingTimer=setInterval(()=>{$('winner').textContent=names[i++%names.length];},180);
+   setTimeout(()=>{if(version!==generation||currentDraw?.id!==d.id)return;clearInterval(rollingTimer);rollingTimer=null;$('result').classList.remove('rolling');winner(d,!replayed);countdown();},remaining);
+ }else winner(d,!replayed&&d.claim_status!=='expired');
+ countdown();
 }
-poll();
-setInterval(poll, 1000);
+function receive(event){const packet=event.detail;if(packet?.protocol!=='paplovag-overlay-v1'||typeof packet.eventId!=='string')return;
+ const stamp=Date.parse(packet.serverNow);if(!Number.isFinite(stamp)||stamp<lastServerTime)return;
+ const d=packet.draw;if(d!==null&&(!d||typeof d.id!=='string'||typeof d.prize!=='string'||typeof d.actor_name!=='string'||
+   typeof d.winner?.display_name!=='string'||!['twitch','youtube','kick'].includes(d.winner.platform)||
+   !Number.isFinite(Date.parse(d.created_at))||!Number.isFinite(Date.parse(d.reveal_at))||!Number.isFinite(Date.parse(d.claim_deadline))))return;
+ if(d&&currentDraw&&Date.parse(d.created_at)<Date.parse(currentDraw.created_at))return;
+ if(d?.id===currentDraw?.id&&currentDraw&&({awaiting:0,expired:1,claimed:2}[d.claim_status]??0)<({awaiting:0,expired:1,claimed:2}[currentDraw.claim_status]??0))return;
+ lastServerTime=stamp;clockOffset=stamp-Date.now();status('');
+ const changed=currentDraw?.id!==d?.id;currentDraw=d;
+ if(!d||hidden(d)){stop();$('result').hidden=true;countdown();return;}
+ if(changed){const replayed=packet.replay===true||seen.has(d.id);remember(d.id);reveal(d,replayed);}else countdown();
+}
+window.addEventListener('paplovagModOverlay',receive);
+window.addEventListener('obsExit',()=>{stop();$('result').hidden=true;status('OBS kapcsolat megszakadt.');});
+// Presentation-only timer: it never contacts Cloudflare and never finalizes a server claim.
 setInterval(countdown,250);
+if(demo){const now=Date.now();receive({detail:{protocol:'paplovag-overlay-v1',eventId:'demo',serverNow:new Date(now).toISOString(),draw:{
+ id:'demo',test:true,created_at:new Date(now).toISOString(),reveal_at:new Date(now+3000).toISOString(),claim_deadline:new Date(now+93000).toISOString(),claim_status:'test',
+ prize:'Steam játékkulcs',actor_name:'Paplovag MOD',winner:{display_name:'TavernaLovag',platform:'twitch'},candidates:['TavernaLovag','Paplovag','GarasVadasz','StreamLovag']}}});}
+else if(!window.obsstudio)status('Az overlay az OBS Browser Source-ban fogadja a Streamer.bot eseményeit.');

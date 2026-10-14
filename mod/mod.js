@@ -309,6 +309,7 @@ function render() {
           archived: "Archiválva",
           purchase_committed: "Jegyvásárlás visszaigazolva",
           message_ack: "Chatüzenet visszaigazolva",
+          overlay_ack: "OBS-eseményt a bot átvette",
           stream_update: "Stream adatok módosítása",
         }[e.action] || e.action,
       ),
@@ -538,7 +539,7 @@ $("#test-overlay").addEventListener("click",async()=>{
   try {
     if(demo){text(label,"Előnézeti teszt: nyisd meg a generált mintacímet az OBS-ben.");return;}
     await api("overlay/test",{requestId:crypto.randomUUID()});
-    text(label,"Teszt elindítva. Az OBS overlayen néhány másodpercen belül mintanevek pörögnek, majd teszt-visszaszámláló indul.");
+    text(label,"Teszt elindítva. A következő botfrissítéskor (legfeljebb kb. 20 mp) az OBS WebSocket-kapcsolaton mintanevek érkeznek az overlayre.");
   }catch(e){text(label,errors[e.message] || "A tesztet nem sikerült elindítani.");}
   finally{button.disabled=false;}
 });
