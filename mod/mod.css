@@ -742,40 +742,6 @@ tbody tr:hover {
   line-height: 1.9;
   color: var(--muted);
 }
-.overlay-card {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  padding: 28px;
-  gap: 35px;
-}
-.overlay-preview {
-  padding: 60px 20px;
-  text-align: center;
-  border: 1px dashed #4b3d67;
-  border-radius: 9px;
-  background: radial-gradient(ellipse, #342344, #14151e);
-}
-.overlay-preview > span {
-  font-size: 45px;
-  color: var(--purple);
-}
-.overlay-preview p {
-  font-size: 10px;
-  letter-spacing: 2px;
-  color: var(--purple);
-  margin: 20px 0;
-}
-.overlay-preview h2 {
-  font-size: 24px;
-  margin-bottom: 15px;
-}
-.overlay-card > div > p {
-  color: var(--muted);
-  font-size: 12px;
-}
-.overlay-card label {
-  margin-top: 25px;
-}
 .notice,
 .demo-banner {
   border-radius: 7px;
@@ -953,9 +919,6 @@ dialog > .icon-button {
   .stream-chat {
     height: clamp(480px, 70dvh, 700px);
   }
-  .overlay-card {
-    grid-template-columns: 1fr;
-  }
   .breadcrumb {
     display: none;
   }
@@ -1011,9 +974,6 @@ dialog > .icon-button {
     margin-left: 0;
     text-align: left;
     width: 100%;
-  }
-  .overlay-card {
-    padding: 20px;
   }
   .page-footer {
     padding: 20px 16px;

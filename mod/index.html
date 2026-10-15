@@ -43,10 +43,7 @@
           </button><button class="nav-item" data-view="history">
             <span>↺</span> Előző sorsolások</button
           ><button class="nav-item" data-view="audit">
-            <span>☷</span> Audit napló</button
-          ><button class="nav-item" data-view="overlay">
-            <span>▣</span> OBS overlay
-          </button>
+            <span>☷</span> Audit napló</button>
         </nav>
         <section class="mod-presence" aria-label="Aktív moderátorok">
           <p class="presence-heading">AKTÍV MODERÁTOROK <span id="presence-count">0</span></p>
@@ -360,46 +357,6 @@
                   </thead>
                   <tbody id="audit-list"></tbody>
                 </table>
-              </div>
-            </section>
-          </section>
-          <section id="view-overlay" class="view" hidden>
-            <div class="heading">
-              <div>
-                <p class="eyebrow">A SORSOLÁS AZ ADÁSBAN</p>
-                <h1>OBS overlay</h1>
-                <p>
-                  Átlátszó animáció a győztes, a nyeremény és a sorsoló nevével.
-                </p>
-              </div>
-            </div>
-            <section class="card overlay-card">
-              <div class="overlay-preview">
-                <span>✦</span>
-                <p>PAPLOVAG NYEREMÉNYJÁTÉK</p>
-                <h2>A következő szerencsés…</h2>
-                <small>A rögzített eredmény itt jelenik meg.</small>
-              </div>
-              <div>
-                <h2>Hozzáadás az OBS-hez</h2>
-                <p>
-                  Készíts egy csak megjelenítésre jogosító címet, majd illeszd
-                  be egy OBS böngészőforrásba. Javasolt méret: 1920 × 1080.
-                </p>
-                <button id="generate-overlay" class="button primary">
-                  Új overlay-cím készítése</button
-                ><label
-                  >OBS böngészőforrás címe<input
-                    id="overlay-url"
-                    readonly
-                    placeholder="A cím itt jelenik meg" /></label
-                ><small
-                  >Fix cím, nem jár le. A meglévő OBS-címed használható.
-                  A megjelenítést a Streamer.bot OBS-kapcsolata indítja.</small
-                >
-                <button id="test-overlay" class="button secondary wide">✦ Overlay teszt – mintanevek</button>
-                <p id="overlay-test-status" class="muted" role="status"></p>
-                <small>A teszt az OBS-ben beállított overlay-címen jelenik meg. Nincs valódi nyertes vagy garaslevonás.</small>
               </div>
             </section>
           </section>
