@@ -172,6 +172,10 @@
                       placeholder="Csak a moderátorok látják"
                     ></textarea>
                   </label>
+                  <label for="claim-seconds">Nyertes jelentkezési ideje (másodperc)
+                    <input id="claim-seconds" name="claimSeconds" type="number" min="10" max="3600" step="1" value="90" required aria-describedby="claim-seconds-help">
+                    <small id="claim-seconds-help">10–3600 mp. A név megjelenésekor indul. Új játékhoz az előző játék mentett értéke töltődik be.</small>
+                  </label>
                   <div class="platform-section">
                     <p>Résztvevő platformok</p>
                     <div class="platforms">
