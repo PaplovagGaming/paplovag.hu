@@ -86,7 +86,8 @@ const errors = {
     "A botnak előbb vissza kell igazolnia a nevezések lezárását.",
   claim_pending: "A nyertesnek még van ideje jelentkezni. Újrasorsolás csak lejárt határidő után lehetséges.",
   winner_not_confirmed: "A nyertes még nem jelentkezett. Lejárat után újrasorsolhatsz.",
-  claim_bot_not_ready: "A 90 másodperces jelentkezéshez az új, nyertesi chatválaszt kezelő botadapter szükséges.",
+  claim_bot_not_ready: "A nyertesi jelentkezéshez az új, nyertesi chatválaszt kezelő botadapter szükséges.",
+  invalid_claim_duration: "A jelentkezési idő 10–3600 közötti egész másodperc legyen.",
   no_eligible_entries: "Minden résztvevő kiesett; nincs további kisorsolható név.",
 };
 function text(el, value) {
@@ -150,11 +151,15 @@ function platformBadge(platform) {
       platform,
   );
 }
+function claimSeconds(round = state.currentRound) {
+  const span=(Date.parse(round?.claim_deadline)-Date.parse(round?.reveal_at))/1000;
+  return Number.isSafeInteger(span)&&span>0 ? span : state.active?.claim_seconds ?? state.defaults?.claimSeconds ?? 90;
+}
 function render() {
   const g = state.active,
     entries = state.entries;
   const editable = !g || g.status === "draft";
-  for (const id of ["prize", "keyword", "note", "max-tickets"])
+  for (const id of ["prize", "keyword", "note", "max-tickets", "claim-seconds"])
     $("#" + id).disabled = !editable || busy;
   $("#create-game").hidden = Boolean(g && g.status !== "draft");
   text($("#create-game"), g ? "Beállítások mentése" : "Játék létrehozása ＋");
@@ -165,8 +170,10 @@ function render() {
     $("#keyword").value = g.keyword;
     $("#note").value = g.note || "";
     $("#max-tickets").value = g.max_tickets;
+    $("#claim-seconds").value = g.claim_seconds ?? 90;
     formRevision = g.revision;
   }
+  if(!g&&!draftDirty)$("#claim-seconds").value=state.defaults?.claimSeconds ?? 90;
   text($("#game-status"), g ? statusNames[g.status] : "Nincs aktív játék");
   if(g?.status==="drawn")text($("#game-status"),state.currentRound?.claim_status==="claimed"?"Nyertes jelentkezett – lezárható":state.currentRound?.claim_status==="expired"?"Újrasorsolható":"Nyertes jelentkezésére vár");
   $("#game-status").classList.toggle("open", g?.status === "open");
@@ -386,7 +393,7 @@ function renderClaim() {
   text($("#claim-winner"),revealing?"✦ Sorsolás folyamatban…":d.winner.display_name);
   const left=Math.max(0,Math.ceil((Date.parse(d.claim_deadline)-serverTime())/1000));
   text($("#claim-clock"),d.claim_status==="claimed"?"✓":revealing?"✦":`${left} mp`);
-  text($("#claim-status"),d.claim_status==="claimed"?"A nyertes jelentkezett. Az admin lezárhatja a játékot.":left===0?"A nyertes nem jelentkezett. Újrasorsoláskor kimarad.":revealing?"A név megjelenése után 90 másodperc indul.":`Írj bármit a ${d.winner.platform} chatbe a jelentkezéshez!`);
+  text($("#claim-status"),d.claim_status==="claimed"?"A nyertes jelentkezett. Az admin lezárhatja a játékot.":left===0?"A nyertes nem jelentkezett. Újrasorsoláskor kimarad.":revealing?`A név megjelenése után ${claimSeconds(d)} másodperc indul.`:`Írj bármit a ${d.winner.platform} chatbe a jelentkezéshez!`);
   if(rollingDialog===d.id&&$("#winner-dialog").open&&serverTime()>=Date.parse(d.reveal_at))text($("#winner-name"),d.winner.display_name);
   if(rollingDialog===d.id)text($("#winner-claim-clock"),d.claim_status==="claimed"?"✓ Jelentkezett":revealing?"Pörgetés…":left===0?"Nem jelentkezett":`${left} mp`);
 }
@@ -398,7 +405,7 @@ function showWinner(d) {
   if (!$("#winner-dialog").open) $("#winner-dialog").showModal();
   clearInterval(dialogTimer);rollingDialog=d.id;
   $("#winner-claim-clock").hidden=!d.claim_deadline;
-  if(d.claim_deadline)text($("#winner-claim-clock"),d.claim_status==="claimed"?"✓ Jelentkezett":d.claim_status==="expired"?"Nem jelentkezett":"90 mp a név megjelenése után");
+  if(d.claim_deadline)text($("#winner-claim-clock"),d.claim_status==="claimed"?"✓ Jelentkezett":d.claim_status==="expired"?"Nem jelentkezett":`${claimSeconds(d)} mp a név megjelenése után`);
   if(d.reveal_at&&serverTime()<Date.parse(d.reveal_at)) {
     const names=(d.snapshot || []).map(e=>e.display_name);let i=0;
     text($("#winner-name"),"✦");
@@ -464,12 +471,14 @@ async function mutate(action, body) {
 }
 $("#game-form").addEventListener("submit", (e) => {
   e.preventDefault();
+  if(!$("#game-form").reportValidity())return;
   mutate(state.active ? `games/${state.active.id}/save` : "games", {
     requestId: crypto.randomUUID(),
     revision: formRevision,
     prize: $("#prize").value,
     keyword: $("#keyword").value,
     maxTickets: Number($("#max-tickets").value),
+    claimSeconds: Number($("#claim-seconds").value),
     note: $("#note").value,
   });
 });
@@ -479,7 +488,7 @@ $$("[data-action]").forEach((b) =>
     if (
       ["draw","reroll"].includes(action) &&
       !confirm(
-        action === "reroll" ? "Újrasorsolás a meglévő jegyekből, a nem jelentkezők kizárásával. Indítod?" : "Sorsolás a nevezéskor rögzített támogatói súlyokkal. A nyertesnek 90 másodperce lesz jelentkezni. Indítod?",
+        action === "reroll" ? "Újrasorsolás a meglévő jegyekből, a nem jelentkezők kizárásával. Indítod?" : `Sorsolás a nevezéskor rögzített támogatói súlyokkal. A nyertesnek ${state.active?.claim_seconds ?? 90} másodperce lesz jelentkezni. Indítod?`,
       )
     )
       return;
@@ -531,6 +540,7 @@ function demoMutation(path, body) {
       prize: body.prize,
       note: body.note,
       max_tickets: body.maxTickets,
+      claim_seconds: body.claimSeconds,
       status: "draft",
       revision: 0,
     };
@@ -543,6 +553,7 @@ function demoMutation(path, body) {
       max_tickets: body.maxTickets,
     });
   } else if (action === "archive") {
+    state.defaults={claimSeconds:state.active.claim_seconds ?? 90};
     state.active = null;
     state.entries = [];
     state.currentRound=null;
@@ -559,7 +570,7 @@ function demoMutation(path, body) {
       prize: state.active.prize,
       actor_name: user.name,
       created_at: new Date().toISOString(),
-      reveal_at:new Date(Date.now()+3000).toISOString(),claim_deadline:new Date(Date.now()+93000).toISOString(),claim_status:"awaiting",
+      reveal_at:new Date(Date.now()+3000).toISOString(),claim_deadline:new Date(Date.now()+3000+(state.active.claim_seconds ?? 90)*1000).toISOString(),claim_status:"awaiting",
       total_weight: eligible.reduce(
         (s, e) => s + e.tickets * (e.supporter ? 2 : 1),
         0,
@@ -585,6 +596,7 @@ async function init() {
         keyword: "nyeremeny",
         note: "Esti stream nyereményjátéka",
         max_tickets: 10,
+        claim_seconds: 90,
         status: "open",
         next_reminder_at: new Date(
           Date.now() + 12 * 60000 + 34000,
