@@ -15,7 +15,7 @@ let state = {
   draftDirty = false,
   formRevision = 0;
 let clockOffset = 0, rollingDialog = "", dialogTimer,lastRefresh=0,refreshInFlight=false,refreshPending=false,refreshRetryAfter=0;
-const viewNames={active:"Nyereményjáték",stream:"Élő stream","stream-data":"Stream adatok",history:"Előző sorsolások",audit:"Audit napló",overlay:"OBS overlay"};
+const viewNames={active:"Nyereményjáték",stream:"Élő stream","stream-data":"Stream adatok",history:"Előző sorsolások",audit:"Audit napló"};
 const presenceTab=crypto.randomUUID();
 let presenceSequence=0,presenceTimer,presenceEnabled=false;
 function renderPresence(moderators) {
@@ -88,8 +88,6 @@ const errors = {
   winner_not_confirmed: "A nyertes még nem jelentkezett. Lejárat után újrasorsolhatsz.",
   claim_bot_not_ready: "A 90 másodperces jelentkezéshez az új, nyertesi chatválaszt kezelő botadapter szükséges.",
   no_eligible_entries: "Minden résztvevő kiesett; nincs további kisorsolható név.",
-  overlay_test_during_draw: "A kisorsolt nyertes játékát előbb zárd le. A teszt nem takarhatja el a valódi nyertest.",
-  overlay_not_configured: "Előbb készíts overlay-címet, és illeszd be az OBS böngészőforrásába.",
 };
 function text(el, value) {
   el.textContent = value;
@@ -522,27 +520,7 @@ $("#logout").addEventListener("click", async () => {
   }
   location.href = "/mod/";
 });
-$("#generate-overlay").addEventListener("click", async () => {
-  if (demo) {
-    $("#overlay-url").value = `${location.origin}/mod/overlay/?demo=1`;
-    return;
-  }
-  const result = await mutate("overlay", {});
-  if (result) {
-    $("#overlay-url").value = result.url;
-    $("#overlay-url").select();
-  }
-});
 $("#close-winner").addEventListener("click", () => $("#winner-dialog").close());
-$("#test-overlay").addEventListener("click",async()=>{
-  const button=$("#test-overlay"),label=$("#overlay-test-status");button.disabled=true;
-  try {
-    if(demo){text(label,"Előnézeti teszt: nyisd meg a generált mintacímet az OBS-ben.");return;}
-    await api("overlay/test",{requestId:crypto.randomUUID()});
-    text(label,"Teszt elindítva. A következő botfrissítéskor (legfeljebb kb. 20 mp) az OBS WebSocket-kapcsolaton mintanevek érkeznek az overlayre.");
-  }catch(e){text(label,errors[e.message] || "A tesztet nem sikerült elindítani.");}
-  finally{button.disabled=false;}
-});
 $("#next-game").addEventListener("click", () => $("#winner-dialog").close());
 function demoMutation(path, body) {
   const action = path.split("/").pop();
