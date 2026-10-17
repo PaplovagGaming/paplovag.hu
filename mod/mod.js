@@ -49,7 +49,7 @@ const actions = {
   draft: ["open", "archive"],
   open: ["close", "remind"],
   closing: [],
-  closed: ["draw"],
+  closed: ["draw", "archive"],
   drawn: ["reroll", "archive"],
 };
 const statusNames = {
@@ -88,7 +88,8 @@ const errors = {
   winner_not_confirmed: "A nyertes még nem jelentkezett. Lejárat után újrasorsolhatsz.",
   claim_bot_not_ready: "A nyertesi jelentkezéshez az új, nyertesi chatválaszt kezelő botadapter szükséges.",
   invalid_claim_duration: "A jelentkezési idő 10–3600 közötti egész másodperc legyen.",
-  no_eligible_entries: "Minden résztvevő kiesett; nincs további kisorsolható név.",
+  no_eligible_entries: "Nincs kisorsolható résztvevő. A játék a Lezárás nyertes nélkül gombbal zárható le.",
+  eligible_entries_remaining: "Még van kisorsolható résztvevő; a játék nem zárható le nyertes nélkül.",
 };
 function text(el, value) {
   el.textContent = value;
@@ -158,6 +159,8 @@ function claimSeconds(round = state.currentRound) {
 function render() {
   const g = state.active,
     entries = state.entries;
+  const hasEligibleEntries = entries.some(e => Number(e.tickets) > 0 && !e.excluded);
+  const exhausted = !hasEligibleEntries && (g?.status === "closed" || (g?.status === "drawn" && state.currentRound?.claim_status === "expired"));
   const editable = !g || g.status === "draft";
   for (const id of ["prize", "keyword", "note", "max-tickets", "claim-seconds"])
     $("#" + id).disabled = !editable || busy;
@@ -176,6 +179,7 @@ function render() {
   if(!g&&!draftDirty)$("#claim-seconds").value=state.defaults?.claimSeconds ?? 90;
   text($("#game-status"), g ? statusNames[g.status] : "Nincs aktív játék");
   if(g?.status==="drawn")text($("#game-status"),state.currentRound?.claim_status==="claimed"?"Nyertes jelentkezett – lezárható":state.currentRound?.claim_status==="expired"?"Újrasorsolható":"Nyertes jelentkezésére vár");
+  if(exhausted)text($("#game-status"),"Nincs több kisorsolható résztvevő – lezárható");
   $("#game-status").classList.toggle("open", g?.status === "open");
   $$("[data-action]").forEach((b) => {
     b.disabled =
@@ -183,9 +187,11 @@ function render() {
     if (b.closest("#game-controls"))
       b.hidden = !g || !(actions[g.status] || []).includes(b.dataset.action);
     const round = state.currentRound;
-    if (g?.status === "drawn" && b.dataset.action === "reroll") b.disabled = busy || !round || round.claim_status === "claimed" || serverTime() < Date.parse(round.claim_deadline) || !entries.some(e=>!e.excluded);
-    if (g?.status === "drawn" && b.dataset.action === "archive") b.disabled = busy || !round || (round.claim_status !== "claimed" && !(round.claim_status === "expired" && !entries.some(e=>!e.excluded)));
-    if (b.dataset.action === "archive") text(b,g?.status === "draft" ? "Előkészítés elvetése" : state.currentRound?.claim_status === "expired" && !entries.some(e=>!e.excluded) ? "Lezárás nyertes nélkül" : "Nyertes megvan – játék lezárása");
+    if (g?.status === "closed" && b.dataset.action === "draw") b.disabled = busy || !hasEligibleEntries || Boolean(state.pending);
+    if (g?.status === "closed" && b.dataset.action === "archive") b.disabled = busy || hasEligibleEntries || Boolean(state.pending);
+    if (g?.status === "drawn" && b.dataset.action === "reroll") b.disabled = busy || !round || round.claim_status !== "expired" || serverTime() < Date.parse(round.claim_deadline) || !hasEligibleEntries;
+    if (g?.status === "drawn" && b.dataset.action === "archive") b.disabled = busy || !round || (round.claim_status !== "claimed" && !exhausted);
+    if (b.dataset.action === "archive") text(b,g?.status === "draft" ? "Előkészítés elvetése" : g?.status === "closed" || exhausted ? "Lezárás nyertes nélkül" : "Nyertes megvan – játék lezárása");
   });
   renderClaim();
   text(

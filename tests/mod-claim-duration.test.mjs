@@ -13,7 +13,7 @@ function fixture(){
   set value(v){this._value=String(v);}get value(){return this._value;}
   addEventListener(name,fn){this.handlers[name]=fn;}setAttribute(){}removeAttribute(){}
   append(...v){this.children.push(...v);}replaceChildren(...v){this.children=v;}
-  closest(){return null;}
+  closest(){return this.dataset.action ? {} : null;}
   reportValidity(){return this.valid!==false;}
   fire(name){return this.handlers[name]?.({preventDefault(){}});}
  }
@@ -31,8 +31,31 @@ function fixture(){
  }};
  runInNewContext(script.replace(/\ninit\(\);\s*$/,'\nglobalThis.controls={set(next){state={...state,...next};},render,renderClaim,claimSeconds,dirty(value){draftDirty=value;},user(){user={id:"mod",name:"Mod"};}};'),context);
  context.controls.set(state);context.controls.user();
- return {get,controls:context.controls,calls,state,settle:()=>new Promise(r=>setImmediate(r))};
+ return {get,actions,controls:context.controls,calls,state,settle:()=>new Promise(r=>setImmediate(r))};
 }
+
+test('closed empty game offers manual close without winner instead of a dead-end draw',async()=>{
+ const f=fixture();Object.assign(f.state,{active:{id:'empty-game',status:'closed',prize:'Test',keyword:'test',max_tickets:10},entries:[],currentRound:null});
+ f.controls.set(f.state);f.controls.render();
+ const archive=f.actions.find(b=>b.dataset.action==='archive'),draw=f.actions.find(b=>b.dataset.action==='draw');
+ assert.equal(archive.hidden,false);assert.equal(archive.disabled,false);assert.equal(archive.textContent,'Lezárás nyertes nélkül');assert.equal(draw.disabled,true);
+ await archive.fire('click');assert.ok(f.calls.some(c=>c.url==='/api/mod/games/empty-game/archive'));
+});
+
+test('closed game archive respects eligibility and unresolved purchases',()=>{
+ const f=fixture(),archive=f.actions.find(b=>b.dataset.action==='archive');
+ f.controls.set({active:{id:'game',status:'closed'},entries:[{tickets:1,excluded:0,display_name:'Test'}]});f.controls.render();assert.equal(archive.disabled,true);
+ f.controls.set({entries:[{tickets:0,excluded:0,display_name:'Test'}]});f.controls.render();assert.equal(archive.disabled,false);
+ f.controls.set({pending:1});f.controls.render();assert.equal(archive.disabled,true);
+});
+
+test('expired last winner offers archive; remaining names require reroll; awaiting winner stays protected',()=>{
+ const f=fixture(),archive=f.actions.find(b=>b.dataset.action==='archive'),reroll=f.actions.find(b=>b.dataset.action==='reroll');
+ f.controls.set({active:{id:'game',status:'drawn'},entries:[{tickets:1,excluded:1,display_name:'Test'}],currentRound:{id:'r',claim_status:'expired',winner:{display_name:'Test'},claim_deadline:new Date(Date.now()-1000).toISOString()}});
+ f.controls.render();assert.equal(archive.disabled,false);assert.equal(reroll.disabled,true);assert.equal(f.get('game-status').textContent,'Nincs több kisorsolható résztvevő – lezárható');
+ f.controls.set({entries:[{tickets:1,excluded:0,display_name:'Test'}]});f.controls.render();assert.equal(archive.disabled,true);assert.equal(reroll.disabled,false);
+ f.controls.set({entries:[],currentRound:{claim_status:'awaiting',winner:{display_name:'Test'},claim_deadline:new Date(Date.now()+60000).toISOString()}});f.controls.render();assert.equal(archive.disabled,true);
+});
 test('claim field uses previous game default without overwriting unsaved edits',()=>{
  const f=fixture();f.controls.render();assert.equal(f.get('claim-seconds').value,'180');
  f.get('claim-seconds').value='240';f.get('game-form').fire('input');
