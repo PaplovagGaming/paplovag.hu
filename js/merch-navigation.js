@@ -1,5 +1,12 @@
 (function(){
 'use strict';
+var merchHeader=document.querySelector('.merch-page #header .header');
+if(merchHeader){
+  function syncMerchHeader(){merchHeader.classList.toggle('active',window.scrollY>10);}
+  syncMerchHeader();
+  window.addEventListener('scroll',syncMerchHeader,{passive:true});
+  window.addEventListener('pageshow',syncMerchHeader);
+}
 var menus=Array.from(document.querySelectorAll('.merch-dropdown'));
 function setOpen(item,open){item.querySelector('.merch-dropdown-toggle').setAttribute('aria-expanded',String(open));item.querySelector('.merch-submenu').hidden=!open;}
 function closeOthers(item){menus.forEach(function(other){if(other!==item)setOpen(other,false);});}

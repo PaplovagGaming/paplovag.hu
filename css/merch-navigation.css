@@ -11,3 +11,9 @@
 .metaportal_fn_mobnav .mob_bot .merch-submenu{margin:10px 0 0;padding:0 0 0 10px;border-left:1px solid rgba(255,255,255,.15)}
 .metaportal_fn_mobnav .mob_bot .merch-submenu li{padding:0}
 .merch-submenu[hidden],.header .nav .merch-submenu[hidden]{display:none}
+
+/* Merch uses the site's fixed desktop header without loading home-only scripts. */
+.merch-page .header .nav{opacity:1}
+@media (max-width:1040px){
+  .merch-page .metaportal_fn_mobnav{position:sticky;top:0;z-index:60;max-height:100vh;max-height:100dvh;overflow-y:auto}
+}
