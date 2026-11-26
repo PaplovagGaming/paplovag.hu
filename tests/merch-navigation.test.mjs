@@ -7,7 +7,7 @@ const read = (path) => readFileSync(new URL('../' + path, import.meta.url), 'utf
 const script = read('js/merch-navigation.js');
 
 test('every Merch page loads the scoped navigation assets', () => {
-  for (const path of ['', 'paplovag/', 'tuzproba/', 'taverna/']) {
+  for (const path of ['', 'paplovag/', 'tuzproba/', 'taverna/', 'cspreborn/']) {
     const html = read('merch/' + path + 'index.html');
     assert.match(html, /<body class="merch-page">/, path);
     assert.match(html, /merch-navigation\.css\?v=2/, path);
