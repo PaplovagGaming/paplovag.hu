@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Merch | Paplovag</title>
-<meta name="description" content="A Paplovag merch hamarosan érkezik.">
+<meta name="description" content="Válogass a Paplovag, a Tűzpróba és a Taverna merch kollekciói közül.">
 <link rel="canonical" href="https://paplovag.hu/merch/">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,14 +12,30 @@
 <link rel="stylesheet" href="/css/plugins.css?ver=7.0">
 <link rel="stylesheet" href="/css/style.css?ver=7.0">
 <style>
-.merch-coming-soon{display:flex;align-items:center;justify-content:center;flex:1;text-align:center;padding:180px 20px 100px}
-.merch-coming-soon .fn__maintitle{margin-bottom:30px}
-.merch-coming-soon .status{font-family:var(--hff);font-size:36px;font-weight:300;line-height:1.22;color:var(--hc);margin:0 0 40px}
-.merch-coming-soon .metaportal_fn_button{margin:0 auto}
+/* Merch collection landing page. Shared navigation remains unchanged. */
+.merch-hub{max-width:1220px;width:100%;flex:1;margin:0 auto;padding:138px 32px 68px;text-align:center}
+.merch-hub .fn__maintitle{margin:0 0 14px}
+.merch-hub__intro{font-size:clamp(17px,2vw,21px);color:#dad2df;margin:0 0 32px}
+.merch-hub__grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px;list-style:none;margin:0;padding:0}
+.merch-hub__grid li{margin:0;display:flex;min-width:0}
+.merch-hub__card{--accent:#d9b2ff;--tint:rgba(110,61,156,.3);width:100%;min-width:0;display:flex;flex-direction:column;overflow:hidden;border:1px solid rgba(255,255,255,.16);border-radius:18px;background:#231925;color:#fff;text-decoration:none;box-shadow:0 12px 32px rgba(0,0,0,.25);transition:border-color .2s ease,box-shadow .2s ease,transform .2s ease}
+.merch-hub__card--tuzproba{--accent:#ffb67f;--tint:rgba(169,58,23,.36)}
+.merch-hub__card--taverna{--accent:#f5cb81;--tint:rgba(150,96,35,.36)}
+.merch-hub__card:hover,.merch-hub__card:focus-visible{color:#fff;border-color:var(--accent);box-shadow:0 16px 35px rgba(0,0,0,.43);transform:translateY(-3px)}
+.merch-hub__art{display:grid;grid-template-rows:minmax(0,1fr);place-items:center;height:clamp(180px,21vw,250px);padding:28px;background:radial-gradient(ellipse at 50% 47%,var(--tint),transparent 76%),#1b141e}
+.merch-hub__art img{width:90%;height:100%;display:block;object-fit:contain;filter:drop-shadow(0 5px 13px rgba(0,0,0,.42))}
+.merch-hub__details{display:flex;align-items:center;text-align:left;justify-content:space-between;gap:14px;padding:16px 22px;border-top:1px solid rgba(255,255,255,.1)}
+.merch-hub__name,.merch-hub__cta{display:block}
+.merch-hub__name{font:700 clamp(21px,2.3vw,29px)/1.14 var(--hff);color:#fff}
+.merch-hub__cta{font-size:15px;margin-top:4px;color:#e2d9e6}
+.merch-hub__arrow{font-size:25px;color:var(--accent)}
+.merch-hub .metaportal_fn_button{margin:34px auto 0}
 a:focus-visible,.merch-menu-toggle:focus-visible{outline:2px solid var(--mc1);outline-offset:6px}
+.merch-hub__card:focus-visible{outline-color:var(--accent)}
 .merch-menu-toggle{border:0;padding:0}
-@media(max-width:1040px){.merch-coming-soon{padding:80px 20px}}
-@media(max-width:480px){.merch-coming-soon .status{font-size:28px}}
+@media(max-width:1040px){.merch-hub{padding-top:54px}}
+@media(max-width:700px){.merch-hub{padding:34px 20px 48px}.merch-hub__grid{max-width:440px;grid-template-columns:minmax(0,1fr);gap:16px;margin-inline:auto}.merch-hub__art{height:206px}.merch-hub__intro{margin-bottom:24px}}
+@media(prefers-reduced-motion:reduce){.merch-hub__card{transition:none}.merch-hub__card:hover,.merch-hub__card:focus-visible{transform:none}}
 </style>
 <link rel="stylesheet" href="/css/merch-navigation.css?v=2">
 </head>
@@ -102,12 +118,32 @@ a:focus-visible,.merch-menu-toggle:focus-visible{outline:2px solid var(--mc1);ou
 
 
 <div class="metaportal_fn_content">
-<main class="merch-coming-soon">
-<div>
+<main class="merch-hub">
 <h1 class="fn__maintitle big" data-text="MERCH" data-align="center">MERCH</h1>
-<p class="status">Coming soon...</p>
+<p class="merch-hub__intro">Válaszd ki, melyik kollekciót néznéd meg!</p>
+<nav aria-label="Merch kollekciók">
+<ul class="merch-hub__grid">
+<li>
+<a class="merch-hub__card merch-hub__card--paplovag" href="/merch/paplovag/">
+<span class="merch-hub__art"><img src="/merch/assets/paplovag-logo.webp" width="660" height="569" alt="" decoding="async"></span>
+<span class="merch-hub__details"><span><strong class="merch-hub__name">Paplovag</strong><span class="merch-hub__cta">Kollekció megnyitása</span></span><span class="merch-hub__arrow" aria-hidden="true">→</span></span>
+</a>
+</li>
+<li>
+<a class="merch-hub__card merch-hub__card--tuzproba" href="/merch/tuzproba/">
+<span class="merch-hub__art"><img src="/merch/assets/tuzproba-logo.webp" width="469" height="660" alt="" decoding="async"></span>
+<span class="merch-hub__details"><span><strong class="merch-hub__name">Tűzpróba</strong><span class="merch-hub__cta">Kollekció megnyitása</span></span><span class="merch-hub__arrow" aria-hidden="true">→</span></span>
+</a>
+</li>
+<li>
+<a class="merch-hub__card merch-hub__card--taverna" href="/merch/taverna/">
+<span class="merch-hub__art"><img src="/merch/assets/taverna-logo.webp" width="660" height="567" alt="" decoding="async"></span>
+<span class="merch-hub__details"><span><strong class="merch-hub__name">Taverna</strong><span class="merch-hub__cta">Kollekció megnyitása</span></span><span class="merch-hub__arrow" aria-hidden="true">→</span></span>
+</a>
+</li>
+</ul>
+</nav>
 <a href="/" class="metaportal_fn_button"><span>Vissza a főoldalra</span></a>
-</div>
 </main>
 <!-- Footer -->
 <footer id="footer">
