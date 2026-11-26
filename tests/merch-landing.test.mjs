@@ -12,7 +12,8 @@ test('the Merch landing links each supplied logo to its own accessible collectio
   assert.deepEqual(cards.map(([,slug]) => slug), ['paplovag','tuzproba','taverna','cspreborn']);
   for (const [index,[,slug,card]] of cards.entries()) {
     const logo = `merch/assets/${slug}-logo.webp`;
-    assert.ok(card.includes(`src="/${logo}"`));
+    const expectedSrc = slug === "cspreborn" ? `${logo}?v=1` : logo;
+    assert.ok(card.includes(`src="/${expectedSrc}"`));
     assert.ok(card.includes(['Paplovag','Tűzpróba','Taverna','CSP Reborn'][index]));
     assert.equal(read(logo).subarray(8, 12).toString(),'WEBP');
     assert.match(read(`merch/${slug}/index.html`).toString(),/data-mbb-url=/);
