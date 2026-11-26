@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Taverna Merch | Paplovag</title>
-<meta name="description" content="A Taverna merch hamarosan érkezik.">
+<meta name="description" content="Nézd meg a Taverna merch kínálatát.">
 <link rel="canonical" href="https://paplovag.hu/merch/taverna/">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,14 +14,14 @@
 <style>
 .header .nav{opacity:1}
 
-.merch-coming-soon{display:flex;align-items:center;justify-content:center;flex:1;text-align:center;padding:180px 20px 100px}
-.merch-coming-soon .fn__maintitle{margin-bottom:30px}
-.merch-coming-soon .status{font-family:var(--hff);font-size:36px;font-weight:300;line-height:1.22;color:var(--hc);margin:0 0 40px}
-.merch-coming-soon .metaportal_fn_button{margin:0 auto}
+.merch-catalog{flex:1;min-width:0;padding:140px 20px 64px}
+.merch-catalog .fn__maintitle{margin-bottom:32px;text-align:center}
+.merch-catalog__embed{width:100%;max-width:1280px;min-width:0;margin:0 auto}
+.merch-catalog .metaportal_fn_button{margin:32px auto 0}
 a:focus-visible,.merch-menu-toggle:focus-visible{outline:2px solid var(--mc1);outline-offset:6px}
 .merch-menu-toggle{border:0;padding:0}
-@media(max-width:1040px){.merch-coming-soon{padding:80px 20px}}
-@media(max-width:480px){.merch-coming-soon .status{font-size:28px}}
+@media(max-width:1040px){.merch-catalog{padding:72px 16px 48px}}
+@media(max-width:480px){.merch-catalog{padding-inline:12px}.merch-catalog .fn__maintitle{margin-bottom:20px}}
 </style>
 <link rel="stylesheet" href="/css/merch-navigation.css?v=1">
 </head>
@@ -104,10 +104,13 @@ a:focus-visible,.merch-menu-toggle:focus-visible{outline:2px solid var(--mc1);ou
 
 
 <div class="metaportal_fn_content">
-<main class="merch-coming-soon">
+<main class="merch-catalog">
 <div>
 <h1 class="fn__maintitle big" data-text="TAVERNA MERCH" data-align="center">TAVERNA MERCH</h1>
-<p class="status">Coming soon...</p>
+<div class="merch-catalog__embed">
+<script async src="https://portal.mbbdekor.hu/media/com_mbbcatalogconnector/embed.js" data-mbb-url="https://portal.mbbdekor.hu/index.php?option=com_mbbcatalogconnector&amp;format=raw&amp;widget=b03b5c08c26cae44b55b991b6f7dbab4" data-mbb-title="Taverna merch katalógus"></script>
+<noscript><p>A merch katalógus megjelenítéséhez engedélyezd a JavaScriptet.</p></noscript>
+</div>
 <a href="/" class="metaportal_fn_button"><span>Vissza a főoldalra</span></a>
 </div>
 </main>
